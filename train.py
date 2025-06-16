@@ -25,7 +25,7 @@ def print_update(cur_train_iter,train_iters,model:LMSteinshark,tokenizer:ByteLev
 
         iters                   = "iter " + f"{cur_train_iter}/{train_iters}".rjust(11) + "   "
         losses                  = f"{float(sum(model.stats['losses'][-64:])) / float(len(model.stats['losses'][-64:])+.01):.5f}".rjust(8) + "   "
-        tok_thru                = f"{(model.stats['tok_snap']/model.stats['time_snap'])/1_000:.1f}k tok/s" + "   "
+        tok_thru                = f"{(model.stats['tok_snap']/(time.time()-model.stats['time_snap']))/1_000:.1f}k tok/s" + "   "
         toks                    = f"{model.stats['tok_through']/1_000_000:.1f}M tokens"
         lr                      = f"  lr={optimizer.param_groups[0]['lr']}"
         LAST_UPDATE_T          = time.time()
@@ -182,7 +182,6 @@ if __name__ == "__main__":
             #Save to stats root
             saving_weights  = ((cur_train_iter + 1) % SAVE_FREQ) == 0
             model.save(root=f"{MODELS}",save_weights=saving_weights)
-            print(f"\tsaved metadata")
             if saving_weights:
                 print(f"\tsaved weights")
 
