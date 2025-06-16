@@ -5,12 +5,8 @@ import os
 os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 import argparse
 from data import TokenizedDataset, load_tokenizer
-import numpy 
 import time 
-import matplotlib
 from matplotlib import pyplot as plt 
-import math
-import json 
 from utils import reduce_arr
 from environment import *
 
