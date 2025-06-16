@@ -255,7 +255,6 @@ class LMSteinshark(torch.nn.Module):
         self.stats = metadata.get("stats", {})
 
         # Check architecture compatibility
-        assert metadata["n_positions"] == self.n_positions, "Mismatch in n_positions"
         assert metadata["n_embed"] == self.n_embed, "Mismatch in n_embed"
         assert metadata["n_layers"] == self.n_layers, "Mismatch in n_layers"
         assert metadata["n_heads"] == self.n_heads, "Mismatch in n_heads"
@@ -405,13 +404,13 @@ class LMSteinshark(torch.nn.Module):
     def model_info(self) -> str:
         info    = f"Model:\t{self.name}\n"
 
-        info    += f'parameters:\t{self.n_params // 1_000_000}M\n'
-        info    += f'num layers:\t{self.n_layers}\n'
-        info    += f'context:\t{self.n_positions}\n'
-        info    += f'embed dim:\t{self.n_embed}\n'
-        info    += f"ff size:\t{self.n_ff}\n"
-        info    += f'num heads:\t{self.n_heads}\n'
-        info    += f'train dtype:\t{str(self.embeddings.weight.dtype).replace("torch.","")}'
+        info    += f'\tparameters:\t{self.n_params // 1_000_000}M\n'
+        info    += f'\tnum layers:\t{self.n_layers}\n'
+        info    += f'\tcontext:\t{self.n_positions}\n'
+        info    += f'\tembed dim:\t{self.n_embed}\n'
+        info    += f"\tff size:\t{self.n_ff}\n"
+        info    += f'\tnum heads:\t{self.n_heads}\n'
+        info    += f'\ttrain dtype:\t{str(self.embeddings.weight.dtype).replace("torch.","")}'
         
 
         return info
