@@ -28,13 +28,13 @@ LOWER                           = False
 
 
 #TRAINING SETTINGS 
-UPDATE_EVERY_T                  = int(10)
-SAMPLE_EVERY_T                  = 1*60
+UPDATE_EVERY_T                  = int(60)
+SAMPLE_EVERY_T                  = 10*60
 LAST_UPDATE_T                   = time.time() 
 LAST_SAMPLE_T                   = time.time() - int(.3*SAMPLE_EVERY_T)
 MAX_NORM                        = 1000
 TOKENIZER                       = 'tokenizer/'
 PROMPT                          = "<|endoftext|>"
-UPDATE_FREQ                     = 10
+UPDATE_FREQ                     = 50
 SAVE_FREQ                       = 10_000
 PROMPT                          = "Computer scientists have developed a novel way to train neural networks."
