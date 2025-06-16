@@ -8,6 +8,7 @@ from data import TokenizedDataset, load_tokenizer
 import numpy 
 import time 
 import matplotlib
+matplotlib.use("qt5agg")
 from matplotlib import pyplot as plt 
 import math
 import json 
@@ -25,7 +26,7 @@ def print_update(cur_train_iter,train_iters,model:LMSteinshark,tokenizer:ByteLev
 
         iters                   = "iter " + f"{cur_train_iter}/{train_iters}".rjust(11) + "   "
         losses                  = f"{float(sum(model.stats['losses'][-64:])) / float(len(model.stats['losses'][-64:])+.01):.5f}".rjust(8) + "   "
-        tok_thru                = f"{(model.stats['tok_snap']/(time.time()-model.stats['time_snap']))/1_000:.1f}k tok/s" + "   "
+        tok_thru                = f"{(model.stats['tok_snap']/model.stats['time_snap'])/1_000:.1f}k tok/s" + "   "
         toks                    = f"{model.stats['tok_through']/1_000_000:.1f}M tokens"
         lr                      = f"  lr={optimizer.param_groups[0]['lr']}"
         LAST_UPDATE_T          = time.time()
@@ -85,7 +86,6 @@ if __name__ == "__main__":
 
     #Model settings 
     n_layers                    = eval(args.n_layers)                           #Transformers stacked 
-    n_embed                     = eval(args.n_embed)                            #Dimension of the embedding per token             
     n_heads                     = n_embed//eval(args.head_dim)                  #Number of attn heads          
     n_ff                        = int(n_embed*eval(args.n_ff))                  #Size of the feed forward network 
     act_fn                      = torch.nn.GELU                                 #Used throughout model
@@ -167,7 +167,7 @@ if __name__ == "__main__":
         model.stats['tok_snap']             += int(bs*input_size)
 
         #Zero if on step cycle 
-        if cur_train_iter + 1 % accu_steps == 0:
+        if ((cur_train_iter + 1) % accu_steps) == 0:
 
             #Clip norm and step
             torch.nn.utils.clip_grad_norm_(model.parameters(),MAX_NORM)
@@ -217,3 +217,4 @@ if __name__ == "__main__":
     #We're done!
     print(f"Model has finished training")
 
+import torch
