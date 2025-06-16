@@ -135,7 +135,7 @@ if __name__ == "__main__":
     model.stats['run_tok_through']  = 0
     model.stats['run_iter_through'] = 0
 
-    model.stats['tok_snap']         = 0 
+    model.stats['tok_snap']         = 0             #For measuring thorughput 
     model.stats['time_snap']        = time.time()
 
     #Run training loop
