@@ -1,7 +1,6 @@
 import os 
 import json
 import string 
-import enchant
 import time
 PATH                    = ""
 
@@ -22,7 +21,6 @@ END_TOKEN                       = "<|endoftext|>"
 
 ALLOWABLE_CHAR                  = string.ascii_lowercase + string.ascii_uppercase + "1234567890!@#$%^&*()~`':;{[}]_-+=<,>.?/}|\\ \n\t" + '"'
 
-ENGL_DICT                       = enchant.Dict("en_US")
 
 LOWER                           = False
 
