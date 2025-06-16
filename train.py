@@ -15,27 +15,33 @@ import json
 from utils import reduce_arr
 from environment import *
 
+#               cur_train_iter, train_iters,model,tokenizer,optimizer,args
+def print_update(cur_train_iter,train_iters,model:LMSteinshark,tokenizer:ByteLevelBPETokenizer,optimizer:torch.optim.Adam,args):
 
-def print_update(current_step,total_step,losses,tok_thruput,model:LMSteinshark,prompt:str,tokenizer:ByteLevelBPETokenizer,optimizer:torch.optim.Adam,args):
+    global LAST_UPDATE_T
+    global LAST_SAMPLE_T
 
     #Check for printint stats 
-    if time.time() - _LAST_UPDATE_T > UPDATE_EVERY_T:
+    if time.time() - LAST_UPDATE_T > UPDATE_EVERY_T:
 
-        iters                   = "iter " + f"{current_step}/{total_step}".rjust(11) + "   "
-        losses                  = f"{float(sum(losses[-64:])) / float(len(losses[-64:])):.5f}".rjust(8) + "   "
-        tok_thru                = f"{tok_thruput/1_000:.1f}k tok/s" + "   "
+        iters                   = "iter " + f"{cur_train_iter}/{train_iters}".rjust(11) + "   "
+        losses                  = f"{float(sum(model.stats['losses'][-64:])) / float(len(model.stats['losses'][-64:])+.01):.5f}".rjust(8) + "   "
+        tok_thru                = f"{(model.stats['tok_snap']/model.stats['time_snap'])/1_000:.1f}k tok/s" + "   "
         toks                    = f"{model.stats['tok_through']/1_000_000:.1f}M tokens"
         lr                      = f"  lr={optimizer.param_groups[0]['lr']}"
-        _LAST_UPDATE_T          = time.time()
+        LAST_UPDATE_T          = time.time()
+
+        model.stats['tok_snap']         = 0 
+        model.stats['time_snap']        = time.time()
 
         print(iters+losses+tok_thru+toks+lr)
 
 
     #Check to sample 
-    if time.time() - _LAST_SAMPLE_T > SAMPLE_EVERY_T:
+    if time.time() - LAST_SAMPLE_T > SAMPLE_EVERY_T:
         print(f"\n\nPrompt: {PROMPT}\n\nModel:",end='')
-        print(f"{tokenizer.decode(model.generate(tokenizer.encode(prompt).ids,TOKENIZER,n_tokens=256,temperature=.7,top_k=100))}\n\n")
-        _LAST_SAMPLE_T          = time.time()
+        print(f"{tokenizer.decode(model.generate(tokenizer.encode(PROMPT).ids,TOKENIZER,n_tokens=256,temperature=.7,top_k=100))}\n\n")
+        LAST_SAMPLE_T          = time.time()
 
 
 if __name__ == "__main__":
@@ -60,21 +66,18 @@ if __name__ == "__main__":
     argparser.add_argument('--head_dim',default='128')
     argparser.add_argument('--n_ff',default='4')
     argparser.add_argument('--load',default='False')
-    argparser.add_argument('--max_tok',default='5_000_000_000')
+    argparser.add_argument('--max_tok',default='1_000_000')
 
     args                        = argparser.parse_args()
 
 
     #Load data 
     max_tokens                  = eval(args.max_tok)
-    tokens                      = [] 
-    dataset                     = TokenizedDataset(TOK_PATH,)
-    _N_TOKENS                   = dataset.n_tokens
+    dataset                     = TokenizedDataset(TOK_PATH,eval(args.input_size),max_tokens=max_tokens)
 
     tokenizer_name              = TOKENIZER                                     #Tokenizer used
     train_root                  = PATH                                          #Where all the training data will be found  
-    
-    tokenizer                   = load_tokenizer(f"{train_root}/{tokenizer_name}")
+    tokenizer                   = load_tokenizer(f"{tokenizer_name}")
 
 
     #Training/Model Settings 
@@ -98,15 +101,14 @@ if __name__ == "__main__":
     virtual_bs                  = train_batch_tok // input_size                 #Number of iters before stepping Optimizer
     accu_steps                  = virtual_bs // bs                              #Number of steps before stepping optimizer
     pct_start                   = .3                                            #Where peak LR will occur       
-    train_iters                 = 2* _N_TOKENS // (bs*input_size)               #Total iters used to train
-    lr_steps                    = 2* _N_TOKENS // train_batch_tok               #Total steps (used for OneCycleLR)
+    train_iters                 = 2* dataset.n_tokens // (bs*input_size)        #Total iters used to train
+    lr_steps                    = 2* dataset.n_tokens // train_batch_tok        #Total steps (used for OneCycleLR)
     tokenizer_name              = args.tokenizer_name                           #Tokenizer used
 
     #Sampling 
     sample_text                 = "Scientists have discovered a new technique for creating Large Language Models."
     PROMPT                      = sample_text
     #Create Tokenizer
-    tokenizer               = load_tokenizer(f"{train_root}/{tokenizer_name}")
     assert tokenizer.get_vocab_size() == vocab_size
 
     #Create model 
@@ -140,13 +142,15 @@ if __name__ == "__main__":
     model.stats['run_tok_through']  = 0
     model.stats['run_iter_through'] = 0
 
+    model.stats['tok_snap']         = 0 
+    model.stats['time_snap']        = time.time()
 
     #Run training loop
     while cur_train_iter < train_iters:
 
         #Sample data 
         num_tok                             = input_size#input_size #+int(int(random.random() < .5)*(1024-input_size)*random.random())
-        batch                               = dataset.sample(bs,input_size,model.device,True)
+        batch                               = dataset.sample(bs,input_size,model.device)
 
         #Make inputs, targets
         input_ids                           = batch['input_ids']
@@ -160,6 +164,9 @@ if __name__ == "__main__":
         #Compute loss and backprop
         loss:torch.Tensor                   = torch.nn.functional.cross_entropy(logits, targets) / accu_steps
         loss.backward()
+
+        #Update for rate tracking 
+        model.stats['tok_snap']             += int(bs*input_size)
 
         #Zero if on step cycle 
         if cur_train_iter + 1 % accu_steps == 0:
@@ -182,14 +189,15 @@ if __name__ == "__main__":
             if saving_weights:
                 print(f"\tsaved weights")
 
-        if cur_train_iter+1 % UPDATE_FREQ == 0:
+        if ((cur_train_iter+1) % UPDATE_FREQ) == 0:
 
             #Update stats
-            model.stats['iter_through']         += 1
-            model.stats['run_iter_through']     += 1 
+            model.stats['iter_through']         += UPDATE_FREQ
+            model.stats['run_iter_through']     += UPDATE_FREQ
 
-            model.stats['tok_through']          += int(bs*input_size)
-            model.stats['run_tok_through']      += int(bs*input_size)
+            model.stats['tok_through']          += int(bs*input_size) * UPDATE_FREQ
+            model.stats['run_tok_through']      += int(bs*input_size) * UPDATE_FREQ
+            
 
             #Get validation loss
             model.set_generate_mode()
