@@ -6,6 +6,7 @@ import json
 from tokenizers.implementations import ByteLevelBPETokenizer
 from torch.nn.functional import scaled_dot_product_attention
 from torch.nn.attention import SDPBackend, sdpa_kernel
+import time 
 
 os.environ['TORCH_USE_CUDA_DSA'] = "True"
 
@@ -185,9 +186,9 @@ class LMSteinshark(torch.nn.Module):
         #Stats 
         self.stats                  = {"iter_through":0,
                                        "tok_through":0,
-                                       "eps_through":0,
                                        "losses":[],
-                                       "tok_snap":[]}
+                                       "tok_snap":0,
+                                       "time_snap":time.time()}
         #Init weights 
         self.initialize_weights()
         
@@ -213,28 +214,111 @@ class LMSteinshark(torch.nn.Module):
                 torch.nn.init.kaiming_normal_(param)
 
 
-    def save(self,root="C:\\data\\nlp\\models"):
-        save_path       = os.path.join(root,self.name)
- 
-        #save metadata
-        with open(save_path+f".json",'w') as writefile:
-            writefile.write(json.dumps(self.stats))
-        
-        #Save params
-        torch.save(self.state_dict(),save_path+f".pt")
-        print(f"\n\nSaved model\n\n")
+    #Creates a json file with the following parameters:
+    def save(self, root="C:\\data\\nlp\\models",save_weights=False):
+        save_path = os.path.join(root, self.name)
+
+        # Create the directory if it doesn't exist
+        os.makedirs(save_path, exist_ok=True)
+
+        # Save the model weights
+        if save_weights:
+            torch.save(self.state_dict(), os.path.join(save_path, "model_weights.pth"))
+
+        # Prepare metadata to save
+        metadata = {
+            "n_positions": self.n_positions,
+            "n_embed": self.n_embed,
+            "n_layers": self.n_layers,
+            "n_heads": self.n_heads,
+            "n_ff": self.n_ff,
+            "n_vocab": self.embeddings.num_embeddings,
+            "act_fn": self.transformer_stack[0].act_fn.__class__.__name__ if hasattr(self.transformer_stack[0], 'act_fn') else str(self.transformer_stack[0]),
+            "dropout": self.transformer_stack[0].dropout if hasattr(self.transformer_stack[0], 'dropout') else "unknown",
+            "stats": self.stats
+        }
+
+        # Save the metadata as a JSON file
+        with open(os.path.join(save_path, "model_config.json"), "w") as f:
+            json.dump(metadata, f, indent=4)
 
 
-    def load(self,root="C:\\data\\nlp\\models"):
-        save_path       = os.path.join(root,self.name)
+    def load(self, root="C:\\data\\nlp\\models"):
+        load_path = os.path.join(root, self.name)
 
-        #Load metadata
-        with open(save_path+f".json",'r') as readfile:
-            self.stats  = json.loads(readfile.read())
-        
-        #Load params
-        self.load_state_dict(torch.load(save_path+f".pt",weights_only=True))
-        print(f"\n\nLoaded model\n\n")
+        # Load metadata/config
+        config_path = os.path.join(load_path, "model_config.json")
+        with open(config_path, "r") as f:
+            metadata = json.load(f)
+
+        # Restore stats
+        self.stats = metadata.get("stats", {})
+
+        # Check architecture compatibility
+        assert metadata["n_positions"] == self.n_positions, "Mismatch in n_positions"
+        assert metadata["n_embed"] == self.n_embed, "Mismatch in n_embed"
+        assert metadata["n_layers"] == self.n_layers, "Mismatch in n_layers"
+        assert metadata["n_heads"] == self.n_heads, "Mismatch in n_heads"
+        assert metadata["n_ff"] == self.n_ff, "Mismatch in n_ff"
+        assert metadata["n_vocab"] == self.embeddings.num_embeddings, "Mismatch in vocab size"
+
+        # Load weights
+        weights_path = os.path.join(load_path, "model_weights.pth")
+        self.load_state_dict(torch.load(weights_path, map_location=self.device))
+
+        print(f"[INFO] Model loaded successfully from: {load_path}")
+
+
+    @staticmethod
+    def from_loadpoint(load_path:str):
+        """
+        Static method to instantiate LMSteinshark from a saved config and weights.
+
+        Args:
+            load_path (str): Path to the saved model directory containing
+                             'model_config.json' and 'model_weights.pth'.
+
+        Returns:
+            LMSteinshark: A fully initialized and weight-loaded instance.
+        """
+        # Load metadata/config
+        config_path = os.path.join(load_path, "model_config.json")
+        with open(config_path, "r") as f:
+            metadata = json.load(f)
+
+        # Map string activation function to actual torch class
+        act_fn_str = metadata.get("act_fn", "GELU").lower()
+        act_fn_map = {
+            "gelu": torch.nn.GELU(),
+            "relu": torch.nn.ReLU(),
+            "silu": torch.nn.SiLU(),
+            "tanh": torch.nn.Tanh(),
+            "leakyrelu": torch.nn.LeakyReLU()
+        }
+        act_fn = act_fn_map.get(act_fn_str.lower(), torch.nn.GELU())
+
+        # Instantiate the model
+        model = LMSteinshark(
+            n_positions = metadata["n_positions"],
+            n_embed     = metadata["n_embed"],
+            n_layers    = metadata["n_layers"],
+            n_heads     = metadata["n_heads"],
+            n_ff        = metadata["n_ff"],
+            n_vocab     = metadata["n_vocab"],
+            act_fn      = act_fn,
+            dropout     = metadata.get("dropout", 0.1)
+        )
+
+        # Load stats
+        model.stats = metadata.get("stats", {})
+
+        # Load model weights
+        weights_path = os.path.join(load_path, "model_weights.pth")
+        model.load_state_dict(torch.load(weights_path, map_location=model.device))
+
+        print(f"[INFO] Loaded LMSteinshark from {load_path} with {model.n_params:,} parameters.")
+
+        return model
 
 
     def set_generate_mode(self):
@@ -316,13 +400,6 @@ class LMSteinshark(torch.nn.Module):
 
         self.set_train_mode()
         return 
-
-
-    def split_input(self,input_ids:torch.Tensor,target_ids:torch.Tensor=None):
-        input_seq                   = input_ids[...,-self.n_positions:].contiguous()
-        target_ids                  = target_ids[...,-self.n_positions:].contiguous()
-        
-        return input_seq,target_ids
 
 
     def model_info(self) -> str:
