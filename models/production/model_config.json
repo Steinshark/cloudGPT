@@ -8,8 +8,8 @@
     "act_fn": "DecoderLayer(\n  (mh_attn): MultiHeadAttention(\n    (layer_1): Linear(in_features=1280, out_features=3840, bias=True)\n    (W_o): Linear(in_features=1280, out_features=1280, bias=True)\n  )\n  (mha_dropout): Dropout(p=0.2, inplace=False)\n  (mha_layer_norm): LayerNorm((1280,), eps=1e-05, elementwise_affine=True)\n  (ff_layers): Sequential(\n    (0): Linear(in_features=1280, out_features=5120, bias=True)\n    (1): GELU(approximate='none')\n    (2): Linear(in_features=5120, out_features=1280, bias=True)\n  )\n  (ff_dropout): Dropout(p=0.2, inplace=False)\n  (ff_layer_norm): LayerNorm((1280,), eps=1e-05, elementwise_affine=True)\n)",
     "dropout": "unknown",
     "stats": {
-        "iter_through": 3000,
-        "tok_through": 196608000,
+        "iter_through": 3600,
+        "tok_through": 235929600,
         "losses": [
             10.75,
             10.375,
@@ -70,12 +70,24 @@
             6.90625,
             7.34375,
             6.78125,
-            6.90625
+            6.90625,
+            6.625,
+            7.09375,
+            6.9375,
+            6.96875,
+            7.15625,
+            7.0,
+            6.84375,
+            6.90625,
+            6.6875,
+            7.125,
+            6.53125,
+            6.9375
         ],
-        "tok_snap": 1835008,
-        "time_snap": 1750050028.6427045,
+        "tok_snap": 7995392,
+        "time_snap": 1750050271.206662,
         "run_time_start": 1750048650.5592325,
-        "run_tok_through": 196608000,
-        "run_iter_through": 3000
+        "run_tok_through": 235929600,
+        "run_iter_through": 3600
     }
 }
