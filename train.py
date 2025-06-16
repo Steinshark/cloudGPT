@@ -8,7 +8,6 @@ from data import TokenizedDataset, load_tokenizer
 import numpy 
 import time 
 import matplotlib
-matplotlib.use("qt5agg")
 from matplotlib import pyplot as plt 
 import math
 import json 
@@ -26,7 +25,7 @@ def print_update(cur_train_iter,train_iters,model:LMSteinshark,tokenizer:ByteLev
 
         iters                   = "iter " + f"{cur_train_iter}/{train_iters}".rjust(11) + "   "
         losses                  = f"{float(sum(model.stats['losses'][-64:])) / float(len(model.stats['losses'][-64:])+.01):.5f}".rjust(8) + "   "
-        tok_thru                = f"{(model.stats['tok_snap']/model.stats['time_snap'])/1_000:.1f}k tok/s" + "   "
+        tok_thru                = f"{(model.stats['tok_snap']/(time.time()-model.stats['time_snap']))/1_000:.1f}k tok/s" + "   "
         toks                    = f"{model.stats['tok_through']/1_000_000:.1f}M tokens"
         lr                      = f"  lr={optimizer.param_groups[0]['lr']}"
         LAST_UPDATE_T          = time.time()
@@ -54,19 +53,18 @@ if __name__ == "__main__":
     argparser                   = argparse.ArgumentParser()
     argparser.add_argument('--model_dir',default='')
     argparser.add_argument('--model_type',default='base')
-    argparser.add_argument('--bs',default='16')
+    argparser.add_argument('--bs',default='32')
     argparser.add_argument("--n_layers",default='16')
-    argparser.add_argument('--bs_tok',default='262144')
-    argparser.add_argument('--train_root',default='/')
+    argparser.add_argument('--bs_tok',default='512*1024')
     argparser.add_argument('--ds_name',default='tokens')
     argparser.add_argument('--tokenizer_name',default='tokenizer')
     argparser.add_argument('--input_size',default='512')
     argparser.add_argument('--model_name',default='production')
-    argparser.add_argument('--n_embed',default='1024')
-    argparser.add_argument('--head_dim',default='128')
+    argparser.add_argument('--n_embed',default='1024+256')
+    argparser.add_argument('--head_dim',default='256')
     argparser.add_argument('--n_ff',default='4')
     argparser.add_argument('--load',default='False')
-    argparser.add_argument('--max_tok',default='1_000_000')
+    argparser.add_argument('--max_tok',default='1_000_000_000')
 
     args                        = argparser.parse_args()
 
