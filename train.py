@@ -111,7 +111,7 @@ if __name__ == "__main__":
     model                       = model.bfloat16()
     if eval(args.load):
         model.load(root=MODELS)
-
+        print(f"loaded model")
     #model                       = model.bfloat16()
     print(f"Initialized model\n\n{model.model_info()}\n\n")
     MODEL                       = model
@@ -212,4 +212,4 @@ if __name__ == "__main__":
     model.save(root=f"{MODELS}",save_weights=True)
     print(f"Model has finished training")
 
-import torch
+
