@@ -8,7 +8,6 @@ from data import TokenizedDataset, load_tokenizer
 import numpy 
 import time 
 import matplotlib
-matplotlib.use("qt5agg")
 from matplotlib import pyplot as plt 
 import math
 import json 
@@ -82,7 +81,7 @@ if __name__ == "__main__":
     #Training/Model Settings 
     input_size                  = eval(args.input_size)                         #1:1 sequence 
     vocab_size                  = tokenizer.get_vocab_size()                    #Vocab Size
-    
+    n_embed                     = eval(args.n_embed) 
 
     #Model settings 
     n_layers                    = eval(args.n_layers)                           #Transformers stacked 
@@ -181,7 +180,7 @@ if __name__ == "__main__":
                 pass
 
             #Save to stats root
-            saving_weights  = cur_train_iter + 1 % SAVE_FREQ
+            saving_weights  = ((cur_train_iter + 1) % SAVE_FREQ) == 0
             model.save(root=f"{MODELS}",save_weights=saving_weights)
             print(f"\tsaved metadata")
             if saving_weights:
