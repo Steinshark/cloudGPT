@@ -403,7 +403,7 @@ class LMSteinshark(torch.nn.Module):
 
 
     def model_info(self) -> str:
-        info    = f"Model: {self.name}\n"
+        info    = f"Model:\t{self.name}\n"
 
         info    += f'parameters:\t{self.n_params // 1_000_000}M\n'
         info    += f'num layers:\t{self.n_layers}\n'
@@ -411,7 +411,7 @@ class LMSteinshark(torch.nn.Module):
         info    += f'embed dim:\t{self.n_embed}\n'
         info    += f"ff size:\t{self.n_ff}\n"
         info    += f'num heads:\t{self.n_heads}\n'
-        info    += f'train dtype:\t{str(self.input_block.semantic_embeddings.weight.dtype).replace("torch.","")}'
+        info    += f'train dtype:\t{str(self.embeddings.weight.dtype).replace("torch.","")}'
         
 
         return info
