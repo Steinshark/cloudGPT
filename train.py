@@ -67,7 +67,7 @@ if __name__ == "__main__":
 
     #Load data 
     max_tokens                  = eval(args.max_tok)
-    dataset                     = TokenizedDataset(TOK_PATH,eval(args.input_size),max_tokens=max_tokens)
+    dataset                     = TokenizedDataset(TOK_PATH,eval(args.input_size),max_tokens=max_tokens,shuffle=True)
 
     tokenizer_name              = TOKENIZER                                     #Tokenizer used
     train_root                  = PATH                                          #Where all the training data will be found  
@@ -209,6 +209,7 @@ if __name__ == "__main__":
         cur_train_iter += 1 
 
     #We're done!
+    model.save(root=f"{MODELS}",save_weights=True)
     print(f"Model has finished training")
 
 import torch
