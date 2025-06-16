@@ -40,6 +40,15 @@ def print_update(cur_train_iter,train_iters,model:LMSteinshark,tokenizer:ByteLev
 
 
 if __name__ == "__main__":
+    
+    free    = 0
+    total   = 90_000_000_000
+
+    while total-free > 20_000_000_000:
+        free, total = torch.cuda.mem_get_info(torch.cuda)
+        time.sleep(10)
+        print(f"awaiting phase completion - {total-free}GB being used")
+    print(f"commencing training")
 
     #Ensure optimizations 
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -211,5 +220,4 @@ if __name__ == "__main__":
     #We're done!
     model.save(root=f"{MODELS}",save_weights=True)
     print(f"Model has finished training")
-
 
