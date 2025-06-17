@@ -25,7 +25,7 @@ class TokenizedDataset(Dataset):
         #Treat it as folder root path 
         elif isinstance(tokens,str):
             tok_root        = tokens 
-            tokens          = numpy.asarray([])
+            token_set       = [] 
             self.n_tokens   = 0 
 
             #Get files loaded
@@ -35,14 +35,12 @@ class TokenizedDataset(Dataset):
 
             #Grab tokens
             for fname in files:
-                tokens  = numpy.append(tokens,numpy.load(fname))
-                self.n_tokens = len(tokens)
+                token_set.append(numpy.load(fname))
 
                 if max_tokens and self.n_tokens > max_tokens:
-                    tokens = torch.from_numpy(tokens)
                     break 
-            else:
-                tokens = torch.from_numpy(tokens)
+            tokens  = numpy.concatenate(token_set).flatten()  
+            tokens  = torch.from_numpy(tokens)
 
         
 
