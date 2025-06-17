@@ -99,12 +99,12 @@ if __name__ == "__main__":
     #Training settings
     train_batch_tok             = eval(args.bs_tok)                             #Number of tokens before stepping optimizer 
     bs                          = eval(args.bs)                                 #BS used per train iter (NOT per optimizer update)
-    lr                          = .0001                                         #Max LR used in OneCycleLR
-    wd                          = .01                                           #WD used throughout
+    lr                          = .00025                                        #Max LR used in OneCycleLR
+    wd                          = .1                                            #WD used throughout
     dropout                     = .2                                            #P used throughout
     virtual_bs                  = train_batch_tok // input_size                 #Number of iters before stepping Optimizer
     accu_steps                  = virtual_bs // bs                              #Number of steps before stepping optimizer
-    pct_start                   = .3                                            #Where peak LR will occur       
+    pct_start                   = .1                                            #Where peak LR will occur       
     train_iters                 = 2* dataset.n_tokens // (bs*input_size)        #Total iters used to train
     lr_steps                    = 2* dataset.n_tokens // train_batch_tok        #Total steps (used for OneCycleLR)
     tokenizer_name              = args.tokenizer_name                           #Tokenizer used
@@ -131,7 +131,7 @@ if __name__ == "__main__":
 
     #Create optimizer 
     optimizer                   = torch.optim.AdamW(params=model.parameters(),lr=lr,weight_decay=wd,betas=(.95,.99))
-    lr_sched                    = torch.optim.lr_scheduler.OneCycleLR(optimizer,max_lr=lr,pct_start=pct_start,total_steps=lr_steps,div_factor=10,final_div_factor=4)
+    lr_sched                    = torch.optim.lr_scheduler.OneCycleLR(optimizer,max_lr=lr,pct_start=pct_start,total_steps=lr_steps,div_factor=10,final_div_factor=100)
 
     #Train model 
     cur_train_iter              = MODEL.stats['iter_through']
