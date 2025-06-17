@@ -111,31 +111,7 @@ class DecoderLayer(torch.nn.Module):
 
         return x
 
-
-
-
-class EncoderBlock(torch.nn.Module):
-    
-    #Context_dim should be n_embed//4
-    def __init__(self,n_vocab,embed_dim,n_positions,device):
-        super(EncoderBlock,self).__init__()
-
-        self.device                 = device
-
-        #Start with a separate context embeddings module 
-        self.semantic_embeddings    = torch.nn.Embedding(n_vocab,embed_dim,device=device)
-
-
-    #Given the context ids and the input ids, return the embeddings to be passed forward 
-    def forward(self,input_ids:torch.Tensor)->torch.Tensor:
-        
-        #Compute actual input embeddings
-        semantic_embeddings:torch.Tensor        = self.semantic_embeddings(input_ids)
-
-        return semantic_embeddings
-       
-            
-
+ 
 
 class LMSteinshark(torch.nn.Module):
 
