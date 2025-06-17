@@ -46,8 +46,8 @@ if __name__ == "__main__":
 
     while total-free > 20_000_000_000:
         free, total = torch.cuda.mem_get_info(torch.cuda)
-        time.sleep(10)
         print(f"awaiting phase completion - {total-free}GB being used")
+        time.sleep(300)
     print(f"commencing training")
 
     #Ensure optimizations 
