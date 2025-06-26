@@ -124,7 +124,7 @@ class TokenizedDataset(Dataset):
         
         if addl_tokens:
             tokens              = numpy.concatenate(addl_tokens).flatten()  
-            tokens              = torch.from_numpy(tokens)
+            tokens              = torch.from_numpy(tokens).type(torch.int32)
 
             self.tokens         = torch.cat([self.tokens,tokens])
             self.n_tokens       = len(self.tokens)
