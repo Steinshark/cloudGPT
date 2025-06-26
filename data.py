@@ -18,18 +18,22 @@ class TokenizedDataset(Dataset):
 
     def __init__(self, tokens, input_size,max_tokens=None,shuffle=False):
         
+        self.loaded_files   = set()
+        self.shuffle        = shuffle
+        self.max_tokens     = max_tokens
+
         #Treat it as tokens list 
         if isinstance(tokens, numpy.ndarray):
             tokens = torch.from_numpy(tokens)
         
         #Treat it as folder root path 
         elif isinstance(tokens,str):
-            tok_root        = tokens 
+            self.root_folder    = tokens 
             token_set       = [] 
             self.n_tokens   = 0 
 
             #Get files loaded
-            files           = [os.path.join(tok_root,name) for name in os.listdir(tok_root) if name.endswith('.npy')]
+            files           = [os.path.join(self.root_folder,name) for name in os.listdir(self.root_folder) if name.endswith('.npy')]
             if shuffle:
                 random.shuffle(files)
 
@@ -39,7 +43,10 @@ class TokenizedDataset(Dataset):
                 self.n_tokens += len(newset) 
                 token_set.append(newset)
 
-                if max_tokens and (self.n_tokens > max_tokens):
+                #Add to loaded files
+                self.loaded_files.add(fname)
+
+                if self.max_tokens and (self.n_tokens > self.max_tokens):
                     break 
 
             tokens  = numpy.concatenate(token_set).flatten()  
@@ -83,7 +90,34 @@ class TokenizedDataset(Dataset):
     def __len__(self):
         return self.n_tokens // self.input_size
 
+    #This function loads additional numpy files not available before (due to slowly streaming data over scp connection)
+    def augment_data(self):
 
+        #Get files loaded
+        files               = [os.path.join(self.root_folder,name) for name in os.listdir(self.root_folder) if name.endswith('.npy')]
+        addl_tokens         = []
+        if self.shuffle:
+            random.shuffle(files)
+
+        #Grab tokens
+        for fname in files:
+            newset:numpy.array      = numpy.load(fname)
+            self.n_tokens           += len(newset) 
+            addl_tokens.append(newset)
+
+            #Add to loaded files
+            self.loaded_files.add(fname)
+
+            if self.max_tokens and (self.n_tokens > self.max_tokens):
+                break 
+        
+        tokens              = numpy.concatenate(addl_tokens).flatten()  
+        tokens              = torch.from_numpy(tokens)
+
+        self.tokens         = torch.cat([self.tokens,tokens])
+        self.n_tokens       = len(self.tokens)
+
+        
 
 if __name__ == "__main__":
 
