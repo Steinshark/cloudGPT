@@ -39,12 +39,15 @@ class TokenizedDataset(Dataset):
 
             #Grab tokens
             for fname in files:
-                newset  = numpy.load(fname)
-                self.n_tokens += len(newset) 
-                token_set.append(newset)
+                try:
+                    newset  = numpy.load(fname)
+                    self.n_tokens += len(newset) 
+                    token_set.append(newset)
 
-                #Add to loaded files
-                self.loaded_files.add(fname)
+                    #Add to loaded files
+                    self.loaded_files.add(fname)
+                except ValueError:
+                    pass
 
                 if self.max_tokens and (self.n_tokens > self.max_tokens):
                     break 
@@ -106,12 +109,15 @@ class TokenizedDataset(Dataset):
         for fname in files:
             if fname in self.loaded_files:
                 continue
-            newset:numpy.array      = numpy.load(fname)
-            self.n_tokens           += len(newset) 
-            addl_tokens.append(newset)
+            try:
+                newset:numpy.array      = numpy.load(fname)
+                self.n_tokens           += len(newset) 
+                addl_tokens.append(newset)
 
-            #Add to loaded files
-            self.loaded_files.add(fname)
+                #Add to loaded files
+                self.loaded_files.add(fname)
+            except ValueError:
+                pass
 
             if self.max_tokens and (self.n_tokens > self.max_tokens):
                 break 
