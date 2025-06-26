@@ -39,15 +39,13 @@ class TokenizedDataset(Dataset):
 
             #Grab tokens
             for fname in files:
-                try:
-                    newset  = numpy.load(fname)
-                    self.n_tokens += len(newset) 
-                    token_set.append(newset)
+                newset  = numpy.load(fname)
+                self.n_tokens += len(newset) 
+                token_set.append(newset)
 
-                    #Add to loaded files
-                    self.loaded_files.add(fname)
-                except ValueError:
-                    pass
+                #Add to loaded files
+                self.loaded_files.add(fname)
+
                 if self.max_tokens and (self.n_tokens > self.max_tokens):
                     break 
 
@@ -106,23 +104,24 @@ class TokenizedDataset(Dataset):
 
         #Grab tokens
         for fname in files:
-            try:
-                newset:numpy.array      = numpy.load(fname)
-                self.n_tokens           += len(newset) 
-                addl_tokens.append(newset)
+            if fname in self.loaded_files:
+                continue
+            newset:numpy.array      = numpy.load(fname)
+            self.n_tokens           += len(newset) 
+            addl_tokens.append(newset)
 
-                #Add to loaded files
-                self.loaded_files.add(fname)
-            except ValueError:
-                pass
+            #Add to loaded files
+            self.loaded_files.add(fname)
+
             if self.max_tokens and (self.n_tokens > self.max_tokens):
                 break 
         
-        tokens              = numpy.concatenate(addl_tokens).flatten()  
-        tokens              = torch.from_numpy(tokens).type(torch.int32)
-        
-        self.tokens         = torch.cat([self.tokens,tokens])
-        self.n_tokens       = len(self.tokens)
+        if addl_tokens:
+            tokens              = numpy.concatenate(addl_tokens).flatten()  
+            tokens              = torch.from_numpy(tokens)
+
+            self.tokens         = torch.cat([self.tokens,tokens])
+            self.n_tokens       = len(self.tokens)
 
         return self.n_tokens > prev_len
 
