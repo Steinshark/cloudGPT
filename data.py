@@ -30,9 +30,8 @@ class TokenizedDataset(Dataset):
         #Treat it as folder root path 
         elif isinstance(tokens,str):
             self.root_folder    = tokens 
-            token_set           = [] 
-            self.n_tokens       = 0 
-            tokens              = numpy.array([])
+            token_set       = [] 
+            self.n_tokens   = 0 
 
             #Get files loaded
             files           = [os.path.join(self.root_folder,name) for name in os.listdir(self.root_folder) if name.endswith('.npy')]
@@ -44,7 +43,7 @@ class TokenizedDataset(Dataset):
                 try:
                     newset  = numpy.load(fname)
                     self.n_tokens += len(newset) 
-                    #tokens  = numpy.concatenate([tokens,newset]).flatten()  
+                    token_set.append(newset)
 
                     #Add to loaded files
                     self.loaded_files.add(fname)
@@ -53,14 +52,15 @@ class TokenizedDataset(Dataset):
 
                 if self.max_tokens and (self.n_tokens > self.max_tokens):
                     break 
-            
 
+            tokens  = numpy.concatenate(token_set).flatten()  
             tokens  = torch.from_numpy(tokens)
 
         
 
         self.tokens         = tokens.contiguous().to(torch.int16)  # Make sure it's contiguous for fast slicing
         self.input_size     = input_size
+        self.n_tokens       = len(self.tokens)
 
 
     #Create indices for sampling
