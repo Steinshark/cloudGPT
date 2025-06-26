@@ -60,7 +60,7 @@ if __name__ == "__main__":
     argparser                   = argparse.ArgumentParser()
     argparser.add_argument('--model_dir',default='')
     argparser.add_argument('--model_type',default='base')
-    argparser.add_argument('--bs',default='2')
+    argparser.add_argument('--bs',default='16')
     argparser.add_argument("--n_layers",default='16')
     argparser.add_argument('--bs_tok',default='512*1024')
     argparser.add_argument('--ds_name',default='D:/nlp/traintokens')
