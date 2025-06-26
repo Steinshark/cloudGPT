@@ -87,6 +87,7 @@ class TokenizedDataset(Dataset):
             "target_ids": batch_target.to(device).long(),
         }
 
+
     def __len__(self):
         return self.n_tokens // self.input_size
 
