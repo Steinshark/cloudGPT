@@ -38,6 +38,9 @@ def print_update(cur_train_iter,train_iters,model:LMSteinshark,tokenizer:ByteLev
         print(f"{tokenizer.decode(model.generate(tokenizer.encode(PROMPT).ids,TOKENIZER,n_tokens=256,temperature=.7,top_k=100))}\n\n")
         LAST_SAMPLE_T          = time.time()
 
+        if dataset.augment_data():
+            print(f"\tDataset augmented  {dataset.n_tokens}")
+
 
 if __name__ == "__main__":
     
@@ -67,7 +70,7 @@ if __name__ == "__main__":
     argparser.add_argument('--tokenizer_name',default='tokenizer')
     argparser.add_argument('--input_size',default='1024')
     argparser.add_argument('--model_name',default='production')
-    argparser.add_argument('--n_embed',default='2048')
+    argparser.add_argument('--n_embed',default='1024+512')
     argparser.add_argument('--head_dim',default='256')
     argparser.add_argument('--n_ff',default='4')
     argparser.add_argument('--load',default='False')
@@ -214,8 +217,6 @@ if __name__ == "__main__":
                 test_loss                   = torch.nn.functional.cross_entropy(logits, targets)
             model.set_train_mode()
             model.stats['losses'].append(float(test_loss))
-            if dataset.augment_data():
-                print(f"\tDataset augmented  {dataset.n_tokens}")
 
         
         print_update(cur_train_iter,train_iters,model,tokenizer,optimizer,args)
