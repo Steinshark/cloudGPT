@@ -16,11 +16,12 @@ def load_tokenizer(f_root:str)->ByteLevelBPETokenizer:
 #Allows sampling of tokens
 class TokenizedDataset(Dataset):
 
-    def __init__(self, tokens, input_size,max_tokens=None,shuffle=False):
+    def __init__(self, tokens, input_size,max_tokens=None,shuffle=False,augmenting=True):
         
         self.loaded_files   = set()
         self.shuffle        = shuffle
         self.max_tokens     = max_tokens
+        self.augmenting     = augmenting
 
         #Treat it as tokens list 
         if isinstance(tokens, numpy.ndarray):
@@ -61,9 +62,6 @@ class TokenizedDataset(Dataset):
         self.input_size     = input_size
         self.n_tokens       = len(self.tokens)
 
-        #Place tokens on device 
-        self.tokens         = self.tokens.cuda().long()         
-
 
     #Create indices for sampling
     def build_idxs(self,bs,n_tokens):
@@ -89,8 +87,8 @@ class TokenizedDataset(Dataset):
         
 
         return {
-            "input_ids": batch_input,
-            "target_ids": batch_target,
+            "input_ids": batch_input.to(device).long(),
+            "target_ids": batch_target.to(device).long(),
         }
 
 
@@ -99,7 +97,10 @@ class TokenizedDataset(Dataset):
 
     #This function loads additional numpy files not available before (due to slowly streaming data over scp connection)
     def augment_data(self):
-
+        
+        if not self.augmenting:
+            return False 
+        
         #Get files loaded
         files               = [os.path.join(self.root_folder,name) for name in os.listdir(self.root_folder) if name.endswith('.npy')]
         addl_tokens         = []
@@ -127,7 +128,7 @@ class TokenizedDataset(Dataset):
         
         if addl_tokens:
             tokens              = numpy.concatenate(addl_tokens).flatten()  
-            tokens              = torch.from_numpy(tokens).type(torch.int32).cuda()
+            tokens              = torch.from_numpy(tokens).type(torch.int32)
 
             self.tokens         = torch.cat([self.tokens,tokens])
             self.n_tokens       = len(self.tokens)
