@@ -39,13 +39,15 @@ class TokenizedDataset(Dataset):
 
             #Grab tokens
             for fname in files:
-                newset  = numpy.load(fname)
-                self.n_tokens += len(newset) 
-                token_set.append(newset)
+                try:
+                    newset  = numpy.load(fname)
+                    self.n_tokens += len(newset) 
+                    token_set.append(newset)
 
-                #Add to loaded files
-                self.loaded_files.add(fname)
-
+                    #Add to loaded files
+                    self.loaded_files.add(fname)
+                except ValueError:
+                    pass
                 if self.max_tokens and (self.n_tokens > self.max_tokens):
                     break 
 
@@ -102,19 +104,21 @@ class TokenizedDataset(Dataset):
 
         #Grab tokens
         for fname in files:
-            newset:numpy.array      = numpy.load(fname)
-            self.n_tokens           += len(newset) 
-            addl_tokens.append(newset)
+            try:
+                newset:numpy.array      = numpy.load(fname)
+                self.n_tokens           += len(newset) 
+                addl_tokens.append(newset)
 
-            #Add to loaded files
-            self.loaded_files.add(fname)
-
+                #Add to loaded files
+                self.loaded_files.add(fname)
+            except ValueError:
+                pass
             if self.max_tokens and (self.n_tokens > self.max_tokens):
                 break 
         
         tokens              = numpy.concatenate(addl_tokens).flatten()  
-        tokens              = torch.from_numpy(tokens)
-
+        tokens              = torch.from_numpy(tokens).type(torch.int32)
+        
         self.tokens         = torch.cat([self.tokens,tokens])
         self.n_tokens       = len(self.tokens)
 
