@@ -62,7 +62,7 @@ class TokenizedDataset(Dataset):
         self.n_tokens       = len(self.tokens)
 
         #Place tokens on device 
-        self.tokens         = self.tokens.cuda()         
+        self.tokens         = self.tokens.cuda().long()         
 
 
     #Create indices for sampling
@@ -89,8 +89,8 @@ class TokenizedDataset(Dataset):
         
 
         return {
-            "input_ids": batch_input.long(),
-            "target_ids": batch_target.long(),
+            "input_ids": batch_input,
+            "target_ids": batch_target,
         }
 
 
