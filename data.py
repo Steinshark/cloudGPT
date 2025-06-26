@@ -62,7 +62,7 @@ class TokenizedDataset(Dataset):
         self.n_tokens       = len(self.tokens)
 
         #Place tokens on device 
-        self.tokens.cuda()         
+        self.tokens         = self.tokens.cuda()         
 
 
     #Create indices for sampling
