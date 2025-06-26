@@ -67,7 +67,7 @@ if __name__ == "__main__":
     argparser.add_argument('--tokenizer_name',default='tokenizer')
     argparser.add_argument('--input_size',default='1024')
     argparser.add_argument('--model_name',default='production')
-    argparser.add_argument('--n_embed',default='1024+512')
+    argparser.add_argument('--n_embed',default='2048')
     argparser.add_argument('--head_dim',default='256')
     argparser.add_argument('--n_ff',default='4')
     argparser.add_argument('--load',default='False')
