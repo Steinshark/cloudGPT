@@ -63,7 +63,7 @@ if __name__ == "__main__":
     argparser.add_argument('--bs',default='16')
     argparser.add_argument("--n_layers",default='16')
     argparser.add_argument('--bs_tok',default='512*1024')
-    argparser.add_argument('--ds_name',default='~/Stein2/cloudGPT/data/')
+    argparser.add_argument('--ds_name',default='/home/ubuntu/Stein2/data')
     argparser.add_argument('--tokenizer_name',default='tokenizer')
     argparser.add_argument('--input_size',default='1024')
     argparser.add_argument('--model_name',default='production')
@@ -71,7 +71,7 @@ if __name__ == "__main__":
     argparser.add_argument('--head_dim',default='256')
     argparser.add_argument('--n_ff',default='4')
     argparser.add_argument('--load',default='False')
-    argparser.add_argument('--max_tok',default='8_000_000_000')
+    argparser.add_argument('--max_tok',default='16_000_000_000')
 
     args                        = argparser.parse_args()
 
@@ -158,8 +158,8 @@ if __name__ == "__main__":
 
         #Make inputs, targets
         input_ids                           = batch['input_ids']
-        target_ids                          = batch['target_ids']
-
+        target_ids                          = batch['target_ids'] 
+        
         #Put through model 
         logits,target_ids                   = model.forward(input_ids,target_ids)
         logits                              = logits.view(bs*input_size,vocab_size)
@@ -214,6 +214,8 @@ if __name__ == "__main__":
                 test_loss                   = torch.nn.functional.cross_entropy(logits, targets)
             model.set_train_mode()
             model.stats['losses'].append(float(test_loss))
+            if dataset.augment_data():
+                print(f"\tDataset augmented  {dataset.n_tokens}")
 
         
         print_update(cur_train_iter,train_iters,model,tokenizer,optimizer,args)
