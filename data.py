@@ -35,10 +35,13 @@ class TokenizedDataset(Dataset):
 
             #Grab tokens
             for fname in files:
-                token_set.append(numpy.load(fname))
+                newset  = numpy.load(fname)
+                self.n_tokens += len(newset) 
+                token_set.append(newset)
 
-                if max_tokens and self.n_tokens > max_tokens:
+                if max_tokens and (self.n_tokens > max_tokens):
                     break 
+
             tokens  = numpy.concatenate(token_set).flatten()  
             tokens  = torch.from_numpy(tokens)
 
