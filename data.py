@@ -61,6 +61,9 @@ class TokenizedDataset(Dataset):
         self.input_size     = input_size
         self.n_tokens       = len(self.tokens)
 
+        #Place tokens on device 
+        self.tokens.cuda()         
+
 
     #Create indices for sampling
     def build_idxs(self,bs,n_tokens):
@@ -86,8 +89,8 @@ class TokenizedDataset(Dataset):
         
 
         return {
-            "input_ids": batch_input.to(device).long(),
-            "target_ids": batch_target.to(device).long(),
+            "input_ids": batch_input.long(),
+            "target_ids": batch_target.long(),
         }
 
 
@@ -124,7 +127,7 @@ class TokenizedDataset(Dataset):
         
         if addl_tokens:
             tokens              = numpy.concatenate(addl_tokens).flatten()  
-            tokens              = torch.from_numpy(tokens).type(torch.int32)
+            tokens              = torch.from_numpy(tokens).type(torch.int32).cuda()
 
             self.tokens         = torch.cat([self.tokens,tokens])
             self.n_tokens       = len(self.tokens)
