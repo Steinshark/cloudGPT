@@ -60,27 +60,27 @@ if __name__ == "__main__":
     argparser                   = argparse.ArgumentParser()
     argparser.add_argument('--model_dir',default='')
     argparser.add_argument('--model_type',default='base')
-    argparser.add_argument('--bs',default='32')
+    argparser.add_argument('--bs',default='2')
     argparser.add_argument("--n_layers",default='16')
     argparser.add_argument('--bs_tok',default='512*1024')
-    argparser.add_argument('--ds_name',default='tokens')
-    argparser.add_argument('--tokenizer_name',default='tokenizer')
-    argparser.add_argument('--input_size',default='512')
+    argparser.add_argument('--ds_name',default='D:/nlp/traintokens')
+    argparser.add_argument('--tokenizer_name',default='D:/nlp/tokenizer')
+    argparser.add_argument('--input_size',default='1024')
     argparser.add_argument('--model_name',default='production')
-    argparser.add_argument('--n_embed',default='1024+256')
+    argparser.add_argument('--n_embed',default='1024+512')
     argparser.add_argument('--head_dim',default='256')
     argparser.add_argument('--n_ff',default='4')
     argparser.add_argument('--load',default='False')
-    argparser.add_argument('--max_tok',default='1_000_000_000')
+    argparser.add_argument('--max_tok',default='8_000_000_000')
 
     args                        = argparser.parse_args()
 
 
     #Load data 
     max_tokens                  = eval(args.max_tok)
-    dataset                     = TokenizedDataset(TOK_PATH,eval(args.input_size),max_tokens=max_tokens,shuffle=True)
+    dataset                     = TokenizedDataset(args.ds_name,eval(args.input_size),max_tokens=max_tokens,shuffle=True)
 
-    tokenizer_name              = TOKENIZER                                     #Tokenizer used
+    tokenizer_name              = args.tokenizer_name                           #Tokenizer used
     train_root                  = PATH                                          #Where all the training data will be found  
     tokenizer                   = load_tokenizer(f"{tokenizer_name}")
 
@@ -179,6 +179,7 @@ if __name__ == "__main__":
             torch.nn.utils.clip_grad_norm_(model.parameters(),MAX_NORM)
             optimizer.step()
             optimizer.zero_grad()
+
             
             #Step lr_scheduler (with error at very end)
             try:
@@ -213,6 +214,7 @@ if __name__ == "__main__":
                 test_loss                   = torch.nn.functional.cross_entropy(logits, targets)
             model.set_train_mode()
             model.stats['losses'].append(float(test_loss))
+
         
         print_update(cur_train_iter,train_iters,model,tokenizer,optimizer,args)
 
