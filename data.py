@@ -99,6 +99,8 @@ class TokenizedDataset(Dataset):
         #Get files loaded
         files               = [os.path.join(self.root_folder,name) for name in os.listdir(self.root_folder) if name.endswith('.npy')]
         addl_tokens         = []
+
+        prev_len            = self.n_tokens
         if self.shuffle:
             random.shuffle(files)
 
@@ -121,6 +123,8 @@ class TokenizedDataset(Dataset):
         
         self.tokens         = torch.cat([self.tokens,tokens])
         self.n_tokens       = len(self.tokens)
+
+        return self.n_tokens > prev_len
 
         
 
