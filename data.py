@@ -4,12 +4,12 @@ from torch.utils.data import Dataset
 import numpy
 import os 
 import random 
-
+from utils import SPECIAL_TOKENS
 
 #Loads a tokenizer from f_root
 def load_tokenizer(f_root:str)->ByteLevelBPETokenizer:
     tokenizer               = ByteLevelBPETokenizer().from_file(vocab_filename=f"{f_root}/vocab.json",merges_filename=f"{f_root}/merges.txt")
-    tokenizer.add_tokens(["<|endoftext|>"])
+    tokenizer.add_tokens(SPECIAL_TOKENS)
     return tokenizer
 
 
@@ -135,7 +135,8 @@ class TokenizedDataset(Dataset):
 
         return self.n_tokens > prev_len
 
-        
+
+
 
 if __name__ == "__main__":
 

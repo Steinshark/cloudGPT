@@ -11,6 +11,19 @@ import time
 os.environ['TORCH_USE_CUDA_DSA'] = "True"
 
 
+class swiglu(torch.nn.Module):
+    
+    def __init__(self,d_in,d_out):
+        super().__init__()
+
+        self.w1         = torch.nn.Linear(d_in,d_out)
+        self.w2         = torch.nn.Linear(d_in,d_out)
+
+    
+    def forward(self,x:torch.Tensor)->torch.Tensor:
+
+        return torch.nn.functional.silu(self.w1(x)) * self.w2(x)
+
 #Used to apply RoPE to MHA
 def apply_rope(x, seq_len, device):
 
@@ -31,30 +44,29 @@ def apply_rope(x, seq_len, device):
     return x_rotated
 
 
-#Implementation of MHA using torch optimization
+#Implementation of multi-head attention
 class MultiHeadAttention(torch.nn.Module):
     
+    
     def __init__(self, embed_dim, num_heads,n_positions, device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),droput=.2):
+
         super(MultiHeadAttention, self).__init__()
         
-        # Ensure that the model dimension (d_model) is divisible by the number of heads
-        assert embed_dim % num_heads == 0, "d_model must be divisible by num_heads"
-        
-        # Initialize dimensions
+        # Initialize parameters
         self.n_positions        = n_positions
-        self.embed_dim          = embed_dim # Model's dimension
-        self.num_heads          = num_heads # Number of attention heads
-        self.d_k                = embed_dim // num_heads # Dimension of each head's key, query, and value
+        self.embed_dim          = embed_dim
+        self.num_heads          = num_heads
+        self.d_k                = embed_dim // num_heads
         self.device             = device
+
         # Linear layers for transforming inputs
         self.layer_1            = torch.nn.Linear(embed_dim,embed_dim*3,bias=True)
-        self.W_o                = torch.nn.Linear(embed_dim, embed_dim,device=device,bias=True)     # Output transformation
+        self.W_o                = torch.nn.Linear(embed_dim, embed_dim,device=device,bias=True)
         self.scale              = 1 / math.sqrt(self.d_k)
         self.dropout            = droput
         self.is_training        = True
         
 
-  
     def forward(self, x:torch.Tensor):
         B, N, C         = x.size()
 
@@ -68,44 +80,38 @@ class MultiHeadAttention(torch.nn.Module):
         Q               = apply_rope(Q,N,self.device)
         K               = apply_rope(K,N,self.device)
 
-        
         with sdpa_kernel([SDPBackend.EFFICIENT_ATTENTION,SDPBackend.FLASH_ATTENTION,SDPBackend.MATH,SDPBackend.CUDNN_ATTENTION]):
             attn_out    = scaled_dot_product_attention(Q,K,V,dropout_p=self.dropout if self.is_training else 0,is_causal=True,scale=self.scale)
             attn_out    = attn_out.transpose(1,2).contiguous().view(B,N,C)
-            output      = self.W_o(attn_out)
-            return output
+            return self.W_o(attn_out)
       
 
+#One stack of a decode-transformer layer
 class DecoderLayer(torch.nn.Module):
 
-    def __init__(self,n_embed,n_head,n_ff,dropout=.1,act_fn=torch.nn.GELU,device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),n_positions=512):
+    def __init__(self,n_embed,n_head,n_positions,n_ff,dropout=.1):
         super(DecoderLayer,self).__init__()
         
-        #Self attention
-        self.mh_attn                = MultiHeadAttention(n_embed,n_head,n_positions,device=device)
+        #Self attention layer
+        self.mh_attn                = MultiHeadAttention(n_embed,n_head,n_positions)
         self.mha_dropout            = torch.nn.Dropout(p=dropout)
-        self.mha_layer_norm         = torch.nn.LayerNorm(n_embed,device=device)
+        self.mha_layer_norm         = torch.nn.LayerNorm(n_embed)
         
-        
-        #Linear 
-        self.ff_layers              = torch.nn.Sequential(
-            torch.nn.Linear(n_embed,n_ff,device=device),
-            act_fn(),
-            torch.nn.Linear(n_ff,n_embed,device=device))
+        #Feed Forward layer
+        self.ff_layers              = torch.nn.Sequential(torch.nn.Linear(n_embed,n_ff), torch.nn.GELU(), torch.nn.Linear(n_ff,n_embed)) #swiglu(n_ff,n_ff)
         self.ff_dropout             = torch.nn.Dropout(p=dropout)
-        self.ff_layer_norm          = torch.nn.LayerNorm(n_embed,device=device)
+        self.ff_layer_norm          = torch.nn.LayerNorm(n_embed)
         
    
     def forward(self,x:torch.Tensor)->torch.Tensor:
         
-        #Apply MHA, residual connection, and layer_norm
+        #Apply layer_norm, MHA, and residual connection
         attn_output                 = self.mh_attn(self.mha_layer_norm(x))
         attn_output                 = self.mha_dropout(attn_output)
         x                           = x + attn_output
 
-        #Apply ff_layer, residual, and layer_norm
-        ff_norm                     = self.ff_layer_norm(x)
-        ff_output                   = self.ff_layers(ff_norm)
+        #Apply layer_norm, ff_layer, and residual connection
+        ff_output                   = self.ff_layers(self.ff_layer_norm(x))
         ff_output                   = self.ff_dropout(ff_output)
         x                           = x + ff_output
 
@@ -129,17 +135,20 @@ class LMSteinshark(torch.nn.Module):
         #Superclass it
         super(LMSteinshark,self).__init__()
         
-        #Make checks 
+        #Ensure embedding dim is equally divisible into n_heads
         assert n_embed % n_heads == 0
 
-        
         #Set class variables
-        self.n_positions            = n_positions
-        self.n_embed                = n_embed
-        self.n_layers               = n_layers
-        self.n_heads                = n_heads
-        self.n_ff                   = n_ff
+        self.n_positions            = int(n_positions)
+        self.n_embed                = int(n_embed)
+        self.n_layers               = int(n_layers)
+        self.n_heads                = int(n_heads)
+        self.n_ff                   = int(n_ff)
         self.device                 = torch.device('cuda:0')
+        try:
+            dropout                 = float(dropout)
+        except ValueError:
+            dropout                 = .1
 
         #Use only vocab embeddings
         self.embeddings             = torch.nn.Embedding(n_vocab,n_embed).to(self.device)
@@ -147,7 +156,7 @@ class LMSteinshark(torch.nn.Module):
         #Create decoder stacks 
         self.transformer_stack      = torch.nn.Sequential(
             OrderedDict(
-                {str(i):DecoderLayer(n_embed,n_heads,n_ff,dropout=dropout,act_fn=act_fn,device=self.device,n_positions=n_positions) 
+                {str(i):DecoderLayer(n_embed,n_heads,n_positions,n_ff,dropout=dropout) 
                  for i in range(n_layers)})).to(self.device)
 
         #Layer norm one last time on the LM Head. Weights are tied to embeddings
@@ -264,13 +273,13 @@ class LMSteinshark(torch.nn.Module):
         # Map string activation function to actual torch class
         act_fn_str = metadata.get("act_fn", "GELU").lower()
         act_fn_map = {
-            "gelu": torch.nn.GELU(),
-            "relu": torch.nn.ReLU(),
-            "silu": torch.nn.SiLU(),
-            "tanh": torch.nn.Tanh(),
-            "leakyrelu": torch.nn.LeakyReLU()
+            "gelu": torch.nn.GELU,
+            "relu": torch.nn.ReLU,
+            "silu": torch.nn.SiLU,
+            "tanh": torch.nn.Tanh,
+            "leakyrelu": torch.nn.LeakyReLU
         }
-        act_fn = act_fn_map.get(act_fn_str.lower(), torch.nn.GELU())
+        act_fn = act_fn_map.get(act_fn_str.lower(), torch.nn.GELU)
 
         # Instantiate the model
         model = LMSteinshark(
@@ -291,7 +300,7 @@ class LMSteinshark(torch.nn.Module):
         weights_path = os.path.join(load_path, "model_weights.pth")
         model.load_state_dict(torch.load(weights_path, map_location=model.device))
 
-        print(f"[INFO] Loaded LMSteinshark from {load_path} with {model.n_params:,} parameters.")
+        print(f"[INFO] Loaded LMSteinshark from {load_path} with {model.n_params:,} parameters.\n{model}")
 
         return model
 
