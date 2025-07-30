@@ -109,8 +109,8 @@ if __name__ == "__main__":
     virtual_bs                  = train_batch_tok // input_size                 #Number of iters before stepping Optimizer
     accu_steps                  = virtual_bs // bs                              #Number of steps before stepping optimizer
     pct_start                   = .1                                            #Where peak LR will occur       
-    train_iters                 = 3* 16_000_000_000 // (bs*input_size)          #Total iters used to train
-    lr_steps                    = 3* 16_000_000_000 // train_batch_tok          #Total steps (used for OneCycleLR)
+    train_iters                 = 3* 26_000_000_000 // (bs*input_size)          #Total iters used to train
+    lr_steps                    = 3* 26_000_000_000 // train_batch_tok          #Total steps (used for OneCycleLR)
     tokenizer_name              = args.tokenizer_name                           #Tokenizer used
 
     #Sampling 
