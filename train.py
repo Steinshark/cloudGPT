@@ -65,7 +65,7 @@ if __name__ == "__main__":
     argparser.add_argument('--model_type',default='base')
     argparser.add_argument('--bs',default='16')
     argparser.add_argument("--n_layers",default='20')
-    argparser.add_argument('--bs_tok',default='1024*1024')
+    argparser.add_argument('--bs_tok',default='1024*8')
     argparser.add_argument('--ds_name',default='/home/ubuntu/Stein2/data')
     argparser.add_argument('--tokenizer_name',default='tokenizer')
     argparser.add_argument('--input_size',default='1024')
@@ -192,10 +192,11 @@ if __name__ == "__main__":
                 pass
 
             #Save to stats root
-            saving_weights  = ((cur_train_iter + 1) % SAVE_FREQ) == 0
+            saving_weights  = (cur_train_iter - LAST_SAVE) > SAVE_FREQ
             model.save(root=f"{MODELS}",save_weights=saving_weights)
             if saving_weights:
                 print(f"\tsaved weights")
+                LAST_SAVE = cur_train_iter
 
         if ((cur_train_iter+1) % UPDATE_FREQ) == 0:
 
