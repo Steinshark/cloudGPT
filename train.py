@@ -103,7 +103,7 @@ if __name__ == "__main__":
     #Training settings
     train_batch_tok             = eval(args.bs_tok)                             #Number of tokens before stepping optimizer 
     bs                          = eval(args.bs)                                 #BS used per train iter (NOT per optimizer update)
-    lr                          = .00005                                        #Max LR used in OneCycleLR
+    lr                          = .0005                                         #Max LR used in OneCycleLR
     wd                          = .1                                            #WD used throughout
     dropout                     = .2                                            #P used throughout
     virtual_bs                  = train_batch_tok // input_size                 #Number of iters before stepping Optimizer
@@ -157,15 +157,13 @@ if __name__ == "__main__":
     while cur_train_iter < train_iters:
 
         #Sample data 
-        num_tok                             = input_size#input_size #+int(int(random.random() < .5)*(1024-input_size)*random.random())
+        num_tok                             = input_size
         batch                               = dataset.sample(bs,input_size,model.device)
 
         #Make inputs, targets
         input_ids                           = batch['input_ids']
         target_ids                          = batch['target_ids'] 
         
-        input(f"training on {input_ids[0][:24]} -> {tokenizer.decode(list(input_ids[0][:24].cpu().detach().numpy()))}")
-
         #Put through model 
         logits,target_ids                   = model.forward(input_ids,target_ids)
         logits                              = logits.view(bs*input_size,vocab_size)
