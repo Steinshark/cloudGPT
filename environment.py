@@ -36,6 +36,6 @@ MAX_NORM                        = 1000
 TOKENIZER                       = 'tokenizer/'
 PROMPT                          = "<|endoftext|>"
 UPDATE_FREQ                     = 50
-SAVE_FREQ                       = 10
+SAVE_FREQ                       = 10_000
 LAST_SAVE                       = 0 
 PROMPT                          = "Computer scientists have developed a novel way to train neural networks."

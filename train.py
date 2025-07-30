@@ -65,7 +65,7 @@ if __name__ == "__main__":
     argparser.add_argument('--model_type',default='base')
     argparser.add_argument('--bs',default='16')
     argparser.add_argument("--n_layers",default='20')
-    argparser.add_argument('--bs_tok',default='1024*8')
+    argparser.add_argument('--bs_tok',default='1024*1024')
     argparser.add_argument('--ds_name',default='/home/ubuntu/Stein2/data')
     argparser.add_argument('--tokenizer_name',default='tokenizer')
     argparser.add_argument('--input_size',default='1024')
