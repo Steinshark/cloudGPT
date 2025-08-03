@@ -248,9 +248,18 @@ class LMSteinshark(torch.nn.Module):
 
         # Load weights
         weights_path = os.path.join(load_path, "model_weights.pth")
-        self.load_state_dict(torch.load(weights_path, map_location=self.device))
 
-        print(f"[INFO] Model loaded successfully from: {load_path}")
+        #Generate compatible state dict 
+        stored_weights          = torch.load(weights_path, map_location=self.device)
+        model_weights           = self.state_dict()
+        compatible_weights      = {k:v for k,v in stored_weights.items() if k in self.state_dict() and v.size() == model_weights[k].size()}
+        try:
+            self.load_state_dict(compatible_weights,strict=False)
+            print(f"loaded {len(compatible_weights)}/{len(model_weights)} modules")
+        except RuntimeError as re:
+            print(f"unable to load weights")
+
+        #print(f"[INFO] Model loaded successfully from: {load_path}")
 
 
     @staticmethod
