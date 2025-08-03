@@ -258,8 +258,11 @@ class LMSteinshark(torch.nn.Module):
             print(f"loaded {len(compatible_weights)}/{len(model_weights)} modules")
 
             if freeze_loaded:
+                frozen = 0
                 for key,module in compatible_weights.items():
-                    model_weights[key]._requires_grad = False
+                    model_weights[key].requires_grad(False)
+                    frozen += 1
+                print(f"froze {frozen} modules")
 
         except RuntimeError as re:
             print(f"unable to load weights")
