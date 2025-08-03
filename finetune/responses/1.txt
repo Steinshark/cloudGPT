@@ -1,0 +1,3 @@
+A computer uses a series of components to perform computations on input data and return an output that is useful to the user. This is accomplished using transistors, which allow for logic to be performed within the circuitry. The CPU conducts the majority of the computation, with other components such as RAM, the motherboard, and storage drives integrating and providing other necessary functionality. 
+
+Would you like me to talk about any of these components in more depth?
