@@ -74,7 +74,7 @@ if __name__ == "__main__":
     argparser.add_argument('--head_dim',default='256')
     argparser.add_argument('--n_ff',default='4')
     argparser.add_argument('--load',default='False')
-    argparser.add_argument('--max_tok',default='16_000_000_000')
+    argparser.add_argument('--max_tok',default='50_000_000_000')
 
     args                        = argparser.parse_args()
 
@@ -103,9 +103,9 @@ if __name__ == "__main__":
     #Training settings
     train_batch_tok             = eval(args.bs_tok)                             #Number of tokens before stepping optimizer 
     bs                          = eval(args.bs)                                 #BS used per train iter (NOT per optimizer update)
-    lr                          = .0005                                         #Max LR used in OneCycleLR
+    lr                          = .0002                                         #Max LR used in OneCycleLR
     wd                          = .1                                            #WD used throughout
-    dropout                     = .2                                            #P used throughout
+    dropout                     = .1                                            #P used throughout
     virtual_bs                  = train_batch_tok // input_size                 #Number of iters before stepping Optimizer
     accu_steps                  = virtual_bs // bs                              #Number of steps before stepping optimizer
     pct_start                   = .1                                            #Where peak LR will occur       
