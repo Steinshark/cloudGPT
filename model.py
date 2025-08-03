@@ -228,7 +228,7 @@ class LMSteinshark(torch.nn.Module):
             json.dump(metadata, f, indent=4)
 
 
-    def load(self, root="C:\\data\\nlp\\models"):
+    def load(self, root="C:\\data\\nlp\\models",freeze_loaded=True):
         load_path = os.path.join(root, self.name)
 
         # Load metadata/config
@@ -256,6 +256,11 @@ class LMSteinshark(torch.nn.Module):
         try:
             self.load_state_dict(compatible_weights,strict=False)
             print(f"loaded {len(compatible_weights)}/{len(model_weights)} modules")
+
+            if freeze_loaded:
+                for key,module in compatible_weights:
+                    model_weights[key]._requires_grad = False
+
         except RuntimeError as re:
             print(f"unable to load weights")
 
