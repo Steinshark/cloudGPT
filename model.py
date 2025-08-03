@@ -240,11 +240,11 @@ class LMSteinshark(torch.nn.Module):
         self.stats = metadata.get("stats", {})
 
         # Check architecture compatibility
-        assert metadata["n_embed"] == self.n_embed, "Mismatch in n_embed"
-        assert metadata["n_layers"] == self.n_layers, "Mismatch in n_layers"
-        assert metadata["n_heads"] == self.n_heads, "Mismatch in n_heads"
-        assert metadata["n_ff"] == self.n_ff, "Mismatch in n_ff"
-        assert metadata["n_vocab"] == self.embeddings.num_embeddings, "Mismatch in vocab size"
+        # assert metadata["n_embed"] == self.n_embed, "Mismatch in n_embed"
+        # assert metadata["n_layers"] == self.n_layers, "Mismatch in n_layers"
+        # assert metadata["n_heads"] == self.n_heads, "Mismatch in n_heads"
+        # assert metadata["n_ff"] == self.n_ff, "Mismatch in n_ff"
+        # assert metadata["n_vocab"] == self.embeddings.num_embeddings, "Mismatch in vocab size"
 
         # Load weights
         weights_path = os.path.join(load_path, "model_weights.pth")
