@@ -250,9 +250,9 @@ class LMSteinshark(torch.nn.Module):
         weights_path = os.path.join(load_path, "model_weights.pth")
 
         #Generate compatible state dict 
-        stored_weights          = torch.load(weights_path, map_location=self.device)
-        model_weights           = self.state_dict()
-        compatible_weights      = {k:v for k,v in stored_weights.items() if k in self.state_dict() and v.size() == model_weights[k].size()}
+        stored_weights                          = torch.load(weights_path, map_location=self.device)
+        model_weights:dict[str,torch.Tensor]    = self.state_dict()
+        compatible_weights                      = {k:v for k,v in stored_weights.items() if k in model_weights and v.size() == model_weights[k].size()}
         try:
             self.load_state_dict(compatible_weights,strict=False)
             print(f"loaded {len(compatible_weights)}/{len(model_weights)} modules")
@@ -260,7 +260,7 @@ class LMSteinshark(torch.nn.Module):
             if freeze_loaded:
                 frozen = 0
                 for key,module in compatible_weights.items():
-                    model_weights[key].requires_grad(False)
+                    model_weights[key].requires_grad_(False)
                     frozen += 1
                 print(f"froze {frozen} modules")
 
