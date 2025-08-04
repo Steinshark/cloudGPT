@@ -259,9 +259,14 @@ class LMSteinshark(torch.nn.Module):
 
             if freeze_loaded:
                 frozen = 0
-                for key,module in compatible_weights.items():
-                    model_weights[key].requires_grad_(False)
-                    frozen += 1
+                for weights_pack, param_group in zip(model_weights,self.parameters()):
+                    key,_                       = weights_pack
+                    if key in compatible_weights:
+                        print(f"freezing {key}")
+                        model_weights[key].requires_grad_(False)
+                        frozen += 1
+                    else:
+                        print(f"{key} is not compat")
                 print(f"froze {frozen} modules")
 
         except RuntimeError as re:
