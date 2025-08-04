@@ -228,7 +228,7 @@ class LMSteinshark(torch.nn.Module):
             json.dump(metadata, f, indent=4)
 
 
-    def load(self, root="C:\\data\\nlp\\models",freeze_loaded=True):
+    def load(self, root="C:\\data\\nlp\\models",freeze_loaded=False):
         load_path = os.path.join(root, self.name)
 
         # Load metadata/config
