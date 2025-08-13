@@ -7,6 +7,7 @@ from tokenizers.implementations import ByteLevelBPETokenizer
 from torch.nn.functional import scaled_dot_product_attention
 from torch.nn.attention import SDPBackend, sdpa_kernel
 import time 
+from utils import END_TOKEN,PROMPT_TOKEN,RESPONSE_TOKEN
 
 os.environ['TORCH_USE_CUDA_DSA'] = "True"
 
@@ -276,7 +277,7 @@ class LMSteinshark(torch.nn.Module):
 
 
     @staticmethod
-    def from_loadpoint(load_path:str):
+    def from_loadpoint(load_path:str,p_override=.05):
         """
         Static method to instantiate LMSteinshark from a saved config and weights.
 
@@ -312,7 +313,7 @@ class LMSteinshark(torch.nn.Module):
             n_ff        = metadata["n_ff"],
             n_vocab     = metadata["n_vocab"],
             act_fn      = act_fn,
-            dropout     = metadata.get("dropout", 0.1)
+            dropout     = p_override if p_override is not None else metadata.get("dropout", 0.1)
         )
 
         # Load stats
@@ -322,7 +323,7 @@ class LMSteinshark(torch.nn.Module):
         weights_path = os.path.join(load_path, "model_weights.pth")
         model.load_state_dict(torch.load(weights_path, map_location=model.device))
 
-        print(f"[INFO] Loaded LMSteinshark from {load_path} with {model.n_params:,} parameters.\n{model}")
+        print(f"[INFO] Loaded LMSteinshark from {load_path} with {model.n_params:,} parameters.\n")
 
         return model
 
@@ -376,33 +377,33 @@ class LMSteinshark(torch.nn.Module):
 
 
     def token_streamer(self,prompt:list[int],tokenizer:ByteLevelBPETokenizer,n_tokens=128,temperature=.7,top_k=100):
+        with torch.no_grad():
+            self.set_generate_mode()
+            full_token_list         = prompt
+            generated_token_list    = []
 
-        self.set_generate_mode()
-        full_token_list         = prompt
-        generated_token_list    = []
+            while len(generated_token_list) < n_tokens:
 
-        while len(generated_token_list) < n_tokens:
+                #Get model output
+                model_input         = torch.tensor(full_token_list).cuda().long().unsqueeze(dim=0)  
+                placeholder_ids     = torch.zeros_like(model_input).cuda().long()
+                logits,_            = self(model_input,placeholder_ids)
 
-            #Get model output
-            model_input         = torch.tensor(full_token_list).cuda().long().unsqueeze(dim=0)  
-            placeholder_ids     = torch.zeros_like(model_input).cuda().long()
-            logits,_            = self(model_input,placeholder_ids)
+                logits              = logits[0,-1,:].float()
+                logits              = logits / temperature
+                vals,indices        = torch.topk(logits,k=top_k)
 
-            logits              = logits[0,-1,:].float()
-            logits                          = logits / temperature
-            vals,indices                    = torch.topk(logits,k=top_k)
+                distribution        = torch.nn.functional.softmax(vals,dim=-1)
+                local_i             = torch.distributions.Categorical(probs=distribution).sample()
+                next_token          = indices[local_i]
 
-            distribution                    = torch.nn.functional.softmax(vals,dim=-1)
-            local_i                         = torch.distributions.Categorical(probs=distribution).sample()
-            next_token                      = indices[local_i]
-
-            #Check if end of sequence
-            if next_token == tokenizer.encode('<|endoftext|>').ids[0]:
-                break
-            else:
-                full_token_list.append(next_token)
-                generated_token_list.append(next_token)
-                yield tokenizer.decode([next_token])
+                #Check if end of sequence
+                if next_token in tokenizer.encode("".join([PROMPT_TOKEN,RESPONSE_TOKEN])).ids:
+                    break
+                else:
+                    full_token_list.append(next_token)
+                    generated_token_list.append(next_token)
+                    yield tokenizer.decode([next_token])
 
         self.set_train_mode()
         return 
