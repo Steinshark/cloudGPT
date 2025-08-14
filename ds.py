@@ -2,7 +2,7 @@ from datasets import load_dataset
 import html
 import re
 import json 
-
+import os 
 
 def strip_html(text):
     # Unescape HTML entities
@@ -89,6 +89,20 @@ def build_baize():
         wf.write(json.dumps(small_dataset))
         print(f"wrote {len(small_dataset)} samples")
 
+def compile_dataset():
+
+    full_dataset    = []
+    for source in ["baize.json","dolly.json","eli5.json","nq.json"]:
+        with open(os.path.join("finetune",source),'r',encoding='utf_8') as rf:
+            samples     = json.loads(rf.read())
+        
+        for data in samples:
+            full_dataset.append(data)
+
+    with open(f"finetune/finetune1.json",'w',encoding='utf_8') as wf:
+        wf.write(json.dumps(full_dataset))
+
+    print(f"generated {len(full_dataset)} training examples")
 
 
 def load_nq():
@@ -107,7 +121,8 @@ def load_nq():
 if __name__ == "__main__":  
     #data = build_nq("train")
     #build_dolly()
-    build_baize()
+    #build_baize()
     #build_eli5()
     #build_trivia()
     #load_nq()
+    compile_dataset()
