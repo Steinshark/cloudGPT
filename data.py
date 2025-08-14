@@ -1,10 +1,14 @@
 from tokenizers.implementations import ByteLevelBPETokenizer
 import torch
-from torch.utils.data import Dataset 
+from torch.utils.data import Dataset, DataLoader, Sampler
+from torch.nn.utils.rnn import pad_sequence
 import numpy
 import os 
 import random 
-from utils import SPECIAL_TOKENS
+from utils import SPECIAL_TOKENS, PROMPT_TOKEN, RESPONSE_TOKEN, RESERVE_1
+import torch
+import json
+import numpy 
 
 #Loads a tokenizer from f_root
 def load_tokenizer(f_root:str)->ByteLevelBPETokenizer:
@@ -135,9 +139,122 @@ class TokenizedDataset(Dataset):
 
         return self.n_tokens > prev_len
 
+class FinetuneTokenizer(ByteLevelBPETokenizer):
+
+    def __init__(self,tokenizer:ByteLevelBPETokenizer,max_len:int=2048,padding_tok=RESERVE_1):
+
+        self.base_tokenizer     = tokenizer
+        self.pad_tok            = self.base_tokenizer.encode(padding_tok).ids[0]
+        self.max_len            = max_len
+
+    def tokenize(self,text:str):
+
+        #Tokenize and truncate
+        tokens                  = self.base_tokenizer.encode(text).ids[:self.max_len]
+        return tokens 
+    
+    def batch_tokenize(self,texts:list[str]):
+
+        batch_tokens            = [self.tokenize(text) for text in texts]
+        seq_lens                = [len(seq) for seq in batch_tokens]
+        batch_len               = max(seq_lens)
+        mask                    = numpy.zeros(shape=(len(batch_tokens),batch_len),dtype=numpy.int16)
+        tokens                  = numpy.zeros_like(mask,dtype=numpy.int16)
+        tokens[:,:]             = self.pad_tok                  
+
+        for i,seq_len in enumerate(seq_lens):
+            tokens[i,:seq_len]  = batch_tokens[i]   #fill tokens
+            mask[i,:seq_len]    = 1                 #fill mask
+        
+        return tokens,mask
 
 
 
+class FinetuneDataset(Dataset):
+    def __init__(self, json_path, tokenizer:FinetuneTokenizer, max_length=2048):
+        with open(json_path, "r", encoding="utf-8") as f:
+            raw_data = json.load(f)
+
+        self.tokenizer      = tokenizer
+        self.pad_token_id   = tokenizer.pad_tok
+        self.max_length     = max_length
+
+        # Pre-tokenize and store lengths
+        self.data = []
+
+        for prompt, reply in raw_data:
+            tokens      = torch.tensor(tokenizer.tokenize(self.format_text(prompt,reply))).long()
+            self.data.append({'input_ids':tokens,"length":len(tokens)})
+
+        # Sort by length for bucketing
+        self.data.sort(key=lambda x: x["length"])
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return self.data[idx]["input_ids"]
+
+    def format_text(self,prompt:str,response:str):
+        return f"{PROMPT_TOKEN}{prompt}{PROMPT_TOKEN}{RESPONSE_TOKEN}{response}{RESPONSE_TOKEN}"
+
+class BucketedBatchSampler(Sampler):
+    def __init__(self, dataset, batch_size, bucket_size=200):
+        self.batch_size     = batch_size
+        self.dataset        = dataset
+        self.bucket_size    = bucket_size
+
+        # Make buckets of indices with similar lengths
+        self.buckets = [
+            list(range(i, min(i + bucket_size, len(dataset))))
+            for i in range(0, len(dataset), bucket_size)
+        ]
+
+    def __iter__(self):
+        all_batches = []
+        for bucket in self.buckets:
+            random.shuffle(bucket)
+            # Break into batches inside each bucket
+            for i in range(0, len(bucket), self.batch_size):
+                all_batches.append(bucket[i:i + self.batch_size])
+        random.shuffle(all_batches)  # Shuffle batch order across buckets
+        return iter(all_batches)
+
+    def __len__(self):
+        return (len(self.dataset) + self.batch_size - 1) // self.batch_size
+
+
+def collate_fn(batch, pad_token_id):
+    batch       = sorted(batch, key=lambda x: len(x), reverse=True)
+    input_ids   = pad_sequence(batch, batch_first=True, padding_value=pad_token_id)
+    attention_mask = (input_ids != pad_token_id).long()
+    return {"input_ids": input_ids, "attention_mask": attention_mask}
+
+
+# Example usage
 if __name__ == "__main__":
+    from transformers import AutoTokenizer
 
-    assert os.path.exists("tokens"), "'tokens' dir does not exist - cannot load tokens"
+    tokenizer   = load_tokenizer('tokenizer')
+    ftt         = FinetuneTokenizer(tokenizer,128,RESERVE_1)
+    #out         = ftt.batch_tokenize(["This one is a Test","this Two is a test. It is longer"])
+
+
+    fname       = 'finetune/unsupervised1.txt'
+    dataset     = FinetuneDataset(fname, ftt)
+
+    sampler = BucketedBatchSampler(dataset, batch_size=4, bucket_size=200)
+
+    loader = DataLoader(
+        dataset,
+        batch_sampler=sampler,
+        collate_fn=lambda x: collate_fn(x, dataset.pad_token_id)
+    )
+
+    print(f"loader is {len(loader)}")
+    for batch in loader:
+        print(batch["input_ids"].shape, batch["attention_mask"].shape)
+        print(tokenizer.decode(batch['input_ids'][0].numpy()))
+        print(tokenizer.decode(batch['input_ids'][1].numpy()))
+        input(tokenizer.decode(batch['input_ids'][2].numpy()))
+
