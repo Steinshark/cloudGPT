@@ -139,6 +139,7 @@ class TokenizedDataset(Dataset):
 
         return self.n_tokens > prev_len
 
+
 class FinetuneTokenizer(ByteLevelBPETokenizer):
 
     def __init__(self,tokenizer:ByteLevelBPETokenizer,max_len:int=2048,padding_tok=RESERVE_1):
@@ -171,18 +172,25 @@ class FinetuneTokenizer(ByteLevelBPETokenizer):
 
 
 class FinetuneDataset(Dataset):
-    def __init__(self, json_path, tokenizer:FinetuneTokenizer, max_length=2048):
+    def __init__(self, json_path, tokenizer:FinetuneTokenizer, max_length=2048,data_cap=1_000_000):
         with open(json_path, "r", encoding="utf-8") as f:
             raw_data = json.load(f)
+            old_len     = len(raw_data)
+            raw_data    = [item for item in raw_data if len(item) == 2]
+            print(f"reduction to {100*len(raw_data)/old_len}")
+
+        if data_cap < len(raw_data):
+            random.shuffle(raw_data)
 
         self.tokenizer      = tokenizer
         self.pad_token_id   = tokenizer.pad_tok
         self.max_length     = max_length
 
         # Pre-tokenize and store lengths
-        self.data = []
+        self.data           = []
+        
 
-        for prompt, reply in raw_data:
+        for prompt, reply in raw_data[:data_cap]:
             tokens      = torch.tensor(tokenizer.tokenize(self.format_text(prompt,reply))).long()
             self.data.append({'input_ids':tokens,"length":len(tokens)})
 
@@ -226,9 +234,11 @@ class BucketedBatchSampler(Sampler):
 
 def collate_fn(batch, pad_token_id):
     batch       = sorted(batch, key=lambda x: len(x), reverse=True)
-    input_ids   = pad_sequence(batch, batch_first=True, padding_value=pad_token_id)
-    attention_mask = (input_ids != pad_token_id).long()
-    return {"input_ids": input_ids, "attention_mask": attention_mask}
+    sequences   = pad_sequence(batch, batch_first=True, padding_value=pad_token_id)
+    input_ids   = sequences[:,:-1]
+    attn_mask   = (input_ids != pad_token_id).bool()
+    target_ids  = sequences[:,1:]
+    return {"input_ids": input_ids,"target_ids": target_ids, "attention_mask": attn_mask}
 
 
 # Example usage

@@ -11,19 +11,39 @@ from utils import END_TOKEN,PROMPT_TOKEN,RESPONSE_TOKEN
 
 os.environ['TORCH_USE_CUDA_DSA'] = "True"
 
-
-class swiglu(torch.nn.Module):
+def top_p(x:torch.Tensor,p=.80):
     
-    def __init__(self,d_in,d_out):
-        super().__init__()
+    #Make them numpy
+    prob,idx    = torch.topk(x,x.size(-1))
+    prob        = prob.cpu().numpy()
+    idx         = idx.cpu().numpy() 
 
-        self.w1         = torch.nn.Linear(d_in,d_out)
-        self.w2         = torch.nn.Linear(d_in,d_out)
-
+    #Shift to positive
+    min_p       = min(prob.flatten())
+    if min_p < 0:
+        prob    = prob - min_p
+    thresh      = p * sum(prob.flatten())
     
-    def forward(self,x:torch.Tensor)->torch.Tensor:
 
-        return torch.nn.functional.silu(self.w1(x)) * self.w2(x)
+    i           = 0
+    new_probs   = [] 
+    new_idx     = [] 
+    cum_p       = 0 
+    while cum_p < thresh:
+        
+        cum_p   += prob[i]
+        
+        new_probs.append(prob[i])
+        new_idx.append(idx[i])
+        i += 1
+    
+    new_probs   = torch.tensor(new_probs)
+    new_idx     = torch.tensor(new_idx)
+    return new_probs, new_idx
+
+
+    pass 
+
 
 #Used to apply RoPE to MHA
 def apply_rope(x, seq_len, device):
@@ -66,9 +86,10 @@ class MultiHeadAttention(torch.nn.Module):
         self.scale              = 1 / math.sqrt(self.d_k)
         self.dropout            = droput
         self.is_training        = True
+        #self.mha_impl           = torch.nn.MultiheadAttention(embed_dim,self.num_heads,dropout=droput,bat)
         
 
-    def forward(self, x:torch.Tensor):
+    def forward(self, x:torch.Tensor,attn_mask:torch.Tensor=None):
         B, N, C         = x.size()
 
         # Apply linear transformations and split heads
@@ -81,8 +102,14 @@ class MultiHeadAttention(torch.nn.Module):
         Q               = apply_rope(Q,N,self.device)
         K               = apply_rope(K,N,self.device)
 
+        # attn_out        = self.mha_impl.forward(Q,K,V,key_padding_mask=attn_mask)
+        # attn_out    = attn_out.transpose(1,2).contiguous().view(B,N,C)
+        # #     return self.W_o(attn_out)
+
         with sdpa_kernel([SDPBackend.EFFICIENT_ATTENTION,SDPBackend.FLASH_ATTENTION,SDPBackend.MATH,SDPBackend.CUDNN_ATTENTION]):
-            attn_out    = scaled_dot_product_attention(Q,K,V,dropout_p=self.dropout if self.is_training else 0,is_causal=True,scale=self.scale)
+            #attn_mask   = torch.tril(torch.zeros(attn_mask.size(0),attn_mask.size(1),attn_mask.size(1)),)
+            attn_mask   = attn_mask.unsqueeze(1).unsqueeze(2)
+            attn_out    = scaled_dot_product_attention(Q,K,V,dropout_p=self.dropout if self.is_training else 0,is_causal=True,scale=self.scale,attn_mask=attn_mask)
             attn_out    = attn_out.transpose(1,2).contiguous().view(B,N,C)
             return self.W_o(attn_out)
       
@@ -104,10 +131,10 @@ class DecoderLayer(torch.nn.Module):
         self.ff_layer_norm          = torch.nn.LayerNorm(n_embed)
         
    
-    def forward(self,x:torch.Tensor)->torch.Tensor:
+    def forward(self,x:torch.Tensor,attn_mask:torch.Tensor=None)->torch.Tensor:
         
         #Apply layer_norm, MHA, and residual connection
-        attn_output                 = self.mh_attn(self.mha_layer_norm(x))
+        attn_output                 = self.mh_attn(self.mha_layer_norm(x),attn_mask=attn_mask)
         attn_output                 = self.mha_dropout(attn_output)
         x                           = x + attn_output
 
@@ -155,10 +182,8 @@ class LMSteinshark(torch.nn.Module):
         self.embeddings             = torch.nn.Embedding(n_vocab,n_embed).to(self.device)
 
         #Create decoder stacks 
-        self.transformer_stack      = torch.nn.Sequential(
-            OrderedDict(
-                {str(i):DecoderLayer(n_embed,n_heads,n_positions,n_ff,dropout=dropout) 
-                 for i in range(n_layers)})).to(self.device)
+        self.transformer_stack      = torch.nn.ModuleList(
+            [DecoderLayer(n_embed,n_heads,n_positions,n_ff,dropout=dropout) for i in range(n_layers)]).to(self.device)
 
         #Layer norm one last time on the LM Head. Weights are tied to embeddings
         self.output_ln              = torch.nn.LayerNorm(n_embed).to(self.device)
@@ -179,13 +204,14 @@ class LMSteinshark(torch.nn.Module):
         self.initialize_weights()
         
     
-    def forward(self,input_ids:torch.Tensor,target_ids:torch.Tensor)->tuple[torch.Tensor, torch.Tensor]:
+    def forward(self,input_ids:torch.Tensor,target_ids:torch.Tensor,attn_mask:torch.Tensor=None)->tuple[torch.Tensor, torch.Tensor]:
 
         #Embed tokens        
         x                               = self.embeddings(input_ids)
 
         #Pass through transformer stack
-        x                               = self.transformer_stack(x)
+        for layer in self.transformer_stack:
+            x                               = layer(x,attn_mask)
 
         #Pass thorugh lm head
         x                               = self.output_ln(x)
@@ -321,7 +347,7 @@ class LMSteinshark(torch.nn.Module):
 
         # Load model weights
         weights_path = os.path.join(load_path, "model_weights.pth")
-        model.load_state_dict(torch.load(weights_path, map_location=model.device))
+        model.load_state_dict(torch.load(weights_path, map_location=model.device),strict=False)
 
         print(f"[INFO] Loaded LMSteinshark from {load_path} with {model.n_params:,} parameters.\n")
 
@@ -376,7 +402,7 @@ class LMSteinshark(torch.nn.Module):
         return model_output
 
 
-    def token_streamer(self,prompt:list[int],tokenizer:ByteLevelBPETokenizer,n_tokens=128,temperature=.7,top_k=100):
+    def token_streamer(self,prompt:list[int],tokenizer:ByteLevelBPETokenizer,n_tokens=128,temperature=.7,topk=100,topp=.8,mode='p'):
         with torch.no_grad():
             self.set_generate_mode()
             full_token_list         = prompt
@@ -386,16 +412,21 @@ class LMSteinshark(torch.nn.Module):
 
                 #Get model output
                 model_input         = torch.tensor(full_token_list).cuda().long().unsqueeze(dim=0)  
+                attn_mask           = torch.ones_like(model_input).cuda().bool()
                 placeholder_ids     = torch.zeros_like(model_input).cuda().long()
-                logits,_            = self(model_input,placeholder_ids)
+                logits,_            = self(model_input,placeholder_ids,attn_mask)
 
                 logits              = logits[0,-1,:].float()
                 logits              = logits / temperature
-                vals,indices        = torch.topk(logits,k=top_k)
 
-                distribution        = torch.nn.functional.softmax(vals,dim=-1)
+                if mode == 'p':
+                    probs,idx       = top_p(logits,topp)
+                elif mode == 'k': 
+                    probs,idx       = torch.topk(logits,k=topk)
+
+                distribution        = torch.nn.functional.softmax(probs,dim=-1)
                 local_i             = torch.distributions.Categorical(probs=distribution).sample()
-                next_token          = indices[local_i]
+                next_token          = idx[local_i]
 
                 #Check if end of sequence
                 if next_token in tokenizer.encode("".join([PROMPT_TOKEN,RESPONSE_TOKEN])).ids:
