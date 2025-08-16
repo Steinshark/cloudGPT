@@ -16,9 +16,10 @@ class ModelTesterApp(tk.Tk):
         self.tokenizer = None
         self._create_widgets()
 
-        self.load_model(filepath="D:/production/model_weights.pth")
+        self.load_model(filepath="C:/data/nlp/models/finetune0/model_weights.pth")
         self.load_tokenizer(tokenizer_dir="C:/gitrepos/cloudgpt/tokenizer")
 
+        self.p_mode     = True 
         
 
     def _create_widgets(self):
@@ -56,6 +57,22 @@ class ModelTesterApp(tk.Tk):
         self.top_k_entry = ttk.Entry(tk_frame, textvariable=self.top_k_var, width=10)
         self.top_k_entry.pack(side='left', padx=5)
 
+        tp_frame = ttk.Frame(self)
+        tp_frame.pack(fill='x', padx=5, pady=5)
+        ttk.Label(tp_frame, text="top_p:").pack(side='left')
+        self.top_p_var = tk.StringVar(value=".8")
+        self.top_p_entry = ttk.Entry(tp_frame, textvariable=self.top_p_var, width=10)
+        self.top_p_entry.pack(side='left', padx=5)
+
+        tm_frame = ttk.Frame(self)
+        tm_frame.pack(fill='x', padx=5, pady=5)
+        #ttk.Label(tm_frame, text="top_p:").pack(side='left')
+        #self.mode_var = tk.StringVar(value="")
+        self.mode_box   = ttk.Checkbutton(tm_frame,text='P mode',command=lambda: self.toggle_mode())
+        self.mode_box.pack(side='left',padx=5)
+        #self.mode_entry = ttk.Entry(tm_frame, textvariable=self.mode_var, width=10)
+        #self.mode_entry.pack(side='left', padx=5)
+
         response_label = ttk.Label(self, text="Response:")
         response_label.pack(anchor='nw', padx=5)
         self.response_text = ScrolledText(self, height=15)
@@ -67,6 +84,10 @@ class ModelTesterApp(tk.Tk):
         self.clear_btn.pack(side='right', padx=5)
         self.generate_btn = ttk.Button(btn_frame, text="Generate", command=self.start_generation_thread)
         self.generate_btn.pack(side='right', padx=5)
+
+    def toggle_mode(self):
+        self.p_mode = not self.p_mode
+        print(f"set P mode -> {self.p_mode}")
 
     def load_model(self,filepath=None):
         if filepath is None:
@@ -109,8 +130,10 @@ class ModelTesterApp(tk.Tk):
             temperature = float(self.temp_var.get())
             n_tokens = int(self.n_tokens_var.get())
             top_k = int(self.top_k_var.get())
+            top_p   = float(self.top_p_var.get())
+            
         except ValueError:
-            self.response_text.insert(tk.END, "Invalid parameter(s). Please check temperature, n_tokens, and top_k.\n")
+            self.response_text.insert(tk.END, "Invalid parameter(s). Please check generation settings\n")
             self.generate_btn.config(state='normal')
             return
 
@@ -119,7 +142,7 @@ class ModelTesterApp(tk.Tk):
 
         # Call your model's token_streamer and append tokens as they come
         try:
-            for token in self.model.token_streamer(prompt, self.tokenizer, n_tokens, temperature, top_k):
+            for token in self.model.token_streamer(prompt, self.tokenizer, n_tokens, temperature, top_k,top_p,mode='p' if self.p_mode else 'k'):
                 # Insert token in the GUI thread
                 self.response_text.after(0, self._append_token, token)
         except Exception as e:

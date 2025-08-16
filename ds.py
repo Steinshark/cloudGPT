@@ -97,6 +97,7 @@ def compile_dataset():
             samples     = json.loads(rf.read())
         
         for data in samples:
+            data        = [" ".join(data[i]) for i in range(len(data))]  
             full_dataset.append(data)
 
     with open(f"finetune/finetune1.json",'w',encoding='utf_8') as wf:
