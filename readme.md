@@ -2,7 +2,7 @@
 
 ## Current Work
 Here you'll find my LLM project - a 1B parameter GPT-2 style model. This model was trained on mainly English and Python Code, uses RoPE, has a vocab of 32768, and is a project I love to spend late nights perfecting! 
-Currently were on the Finetuning phase. I'm using ELI5, Baize, Natural Questions, code Alpaca, and a Reddit dataset as an unsupervised dataset. Next, I'll be collecting human feedback on response pairs to try to 
+Currently we're on the Finetuning phase. I'm using ELI5, Baize, Natural Questions, code Alpaca, and a Reddit dataset as an unsupervised dataset. Next, I'll be collecting human feedback on response pairs to try to 
 perform some RLHF - stay tuned, I hope I can actually get people to participate.
 
 ## Usage 
