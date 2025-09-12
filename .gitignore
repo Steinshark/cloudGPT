@@ -2,3 +2,4 @@
 *.npy
 *.json*
 *.txt*
+*__pycache__
