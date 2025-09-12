@@ -148,7 +148,8 @@ class LMSteinshark(torch.nn.Module):
                  n_ff       :int=1024,
                  n_vocab    :int=32768,
                  act_fn     :torch.nn.functional=torch.nn.GELU,
-                 dropout    :float=.1):
+                 dropout    :float=.1,
+                 dtype=torch.bfloat16):
         
         #Superclass it
         super(LMSteinshark,self).__init__()
@@ -169,14 +170,14 @@ class LMSteinshark(torch.nn.Module):
             dropout                 = .1
 
         #Use only vocab embeddings
-        self.embeddings             = torch.nn.Embedding(n_vocab,n_embed).to(self.device)
+        self.embeddings             = torch.nn.Embedding(n_vocab,n_embed)
 
         #Create decoder stacks 
         self.transformer_stack      = torch.nn.ModuleList(
-            [DecoderLayer(n_embed,n_heads,n_positions,n_ff,dropout=dropout) for i in range(n_layers)]).to(self.device)
+            [DecoderLayer(n_embed,n_heads,n_positions,n_ff,dropout=dropout) for i in range(n_layers)])
 
         #Layer norm one last time on the LM Head. Weights are tied to embeddings
-        self.output_ln              = torch.nn.LayerNorm(n_embed).to(self.device)
+        self.output_ln              = torch.nn.LayerNorm(n_embed)
 
         #Calc params 
         self.n_params               = sum(p.numel() for p in self.parameters())
@@ -192,6 +193,7 @@ class LMSteinshark(torch.nn.Module):
                                        "time_snap":time.time()}
         #Init weights 
         self.initialize_weights()
+        self.to(self.device,dtype=dtype)
         
     
     def forward(self,input_ids:torch.Tensor,target_ids:torch.Tensor,attn_mask:torch.Tensor=None)->tuple[torch.Tensor, torch.Tensor]:
