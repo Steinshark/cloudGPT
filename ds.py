@@ -3,6 +3,53 @@ import html
 import re
 import json 
 import os 
+import random
+from utils import END_TOKEN,           CODE_TOKEN,          RUNCODE_TOKEN,       WEB_TOKEN,           PROMPT_TOKEN,        RESPONSE_TOKEN,      RESERVE_1,           RESERVE_2
+
+
+
+instruct_variants   = [
+        "Here is a task for you to solve:",
+        "Please complete the following request:",
+        "Given the instruction below, provide the correct output:",
+        "Your task is:",
+        "Answer the following question:",
+        "Solve the task described here:",
+        "Follow the instruction and provide a response:",
+        "Complete the request that follows:",
+        "Respond appropriately to the task below:",
+        "Carry out the instruction provided:",
+        "Read the instruction and answer accordingly:",
+        "Provide a solution for the following task:",
+        "The following is a task. Please respond:",
+        "Execute the instruction given below:",
+        "Based on the task described, give a proper response:",
+        "Follow the directions and complete the request:",
+        "Here is an instruction. Respond accordingly:",
+        "Process the following instruction and answer:",
+        "Below is a request. Please provide the response:",
+        "Complete the following instruction appropriately:",
+        "Below is an instruction that describes a task. Write a response that appropriately completes the request."
+        ]
+
+
+# Variants for input prompts
+input_variants = [
+        "Here is the provided input:",
+        "Use this input:",
+        "Base it off of this input:",
+        "Utilize the following input for your code:",
+        "Here is some input to use:",
+        "The following input should be processed:",
+        "Given these values:",
+        "Use the data below:",
+        "Consider the following input:",
+        "here is some input to use",
+        'this is some input to use',
+        'the code should use this',
+        'Base the code off of this input'
+        "### Input:"  # occasional structured header
+        ]
 
 def strip_html(text):
     # Unescape HTML entities
@@ -24,44 +71,46 @@ def process_q(entry:dict):
     return None
    
 
+#Simplified NQ -> much better version to be had
 def build_nq(split="train"):
     # Load the simplified train set
-    dataset         = load_dataset("natural_questions","default",split=split,streaming=True)
+    dataset         = load_dataset("florin-hf/nq_open_gold",streaming=True)['train']
     small_dataset   = []
-    saved_on        = set()
     for i, example in enumerate(dataset):
-        p_ex    = process_q(example)
-        if p_ex is not None:
-            small_dataset.append(p_ex)
 
-        #Save every 2000 samples
-        n_ex        = len(small_dataset) + 1 
-        if (not n_ex in saved_on) and (len(small_dataset)+1) % 2000 == 0:
-            with open("finetune/nq.json",'w',encoding='utf_8') as wf:
-                wf.write(json.dumps(small_dataset))
-            print(f"wrote {len(small_dataset)} samples")
-            saved_on.add(n_ex)
+        
+        question    = example['question']
+        answer      = example['text']
+
+        small_dataset.append(f"{PROMPT_TOKEN}{question}{RESPONSE_TOKEN}{answer}")
+
+    with open("finetune/nq.json",'w',encoding='utf_8') as wf:
+        wf.write(json.dumps(small_dataset))
+    print(f"wrote {len(small_dataset)} samples")
 
 
     return small_dataset
 
+#ELI5 is always consistent
 def build_eli5():
     ds = load_dataset("sentence-transformers/eli5",split='train',streaming=True)
 
     small_dataset   = [] 
     for i,data in enumerate(ds):    
-        small_dataset.append((data['question'],data['answer']))
+        small_dataset.append(f"{PROMPT_TOKEN}{data['question']}{RESPONSE_TOKEN}{data['answer']}")
 
     with open("finetune/eli5.json",'w',encoding='utf_8') as wf:
         wf.write(json.dumps(small_dataset))
         print(f"wrote {len(small_dataset)} samples")
 
+#This one sucks!
 def build_trivia():
     dataset = load_dataset("sentence-transformers/trivia-qa", "pair", split="train",streaming=True)
 
     for i,data in enumerate(dataset):
         input(f"\n\n{data['query']}\n\n{data['answer']}")
 
+#This one is not great!
 def build_dolly():
     ds              = load_dataset("databricks/databricks-dolly-15k",split='train',streaming=True)
     small_dataset   = [] 
@@ -72,32 +121,79 @@ def build_dolly():
     with open("finetune/dolly.json",'w',encoding='utf_8') as wf:
         wf.write(json.dumps(small_dataset))
         print(f"wrote {len(small_dataset)} samples")
-    
+
+#Excellent for instruct!
 def build_baize():
-    ds = load_dataset("taskydata/baize_chatbot",split='train',streaming=True)
+    ds = load_dataset("linkanjarad/baize-chat-data",split='train',streaming=True)
     small_dataset = [] 
 
     for i,data in enumerate(ds):
-        text:str    = data['input']
-        text        = text.split('[|Human|]',maxsplit=1)[1]
-        question    = text.split('[|AI|]')[0].split()
-        answer      = text.split('[|AI|]')[1].split('[|Human|]')[0].split()
+        text:str    = data['chat_sample']
+        HUMAN       = '[|Human|]'
+        AI          = '[|AI|]'
 
-        small_dataset.append((question,answer))
+        text        = text.split(HUMAN,maxsplit=1)[1]
+        text        = text.replace(HUMAN,PROMPT_TOKEN).replace(AI,RESPONSE_TOKEN)
+        small_dataset.append(f"{PROMPT_TOKEN}{text}")
 
     with open("finetune/baize.json",'w',encoding='utf_8') as wf:
         wf.write(json.dumps(small_dataset))
         print(f"wrote {len(small_dataset)} samples")
 
+#Great dataset
+def build_reddit():
+    path = r"D:\nlp\finetune\reddit.txt"
+    small_dataset = [] 
+    text  = open(path,'r',encoding='utf-8').read()
+
+    conversations   = text.split("<|endoftext|>")
+
+    for conv in conversations:
+        try:
+            q,a = conv.split('\n\n')[:2]
+            small_dataset.append(f"{PROMPT_TOKEN}{q}{RESPONSE_TOKEN}{a}")
+        except ValueError:
+            pass
+
+        #input(f'{a} -> {q}')
+    with open("finetune/reddit.json",'w',encoding='utf_8') as wf:
+        wf.write(json.dumps(small_dataset))
+        print(f"wrote {len(small_dataset)} samples")
+
+#Good coding 
+def build_code_alpaca():
+    ds = load_dataset("iamtarun/python_code_instructions_18k_alpaca",split='train')
+
+
+
+    small_dataset = [] 
+
+    for i,data in enumerate(ds):
+        prompt      = data['prompt'].replace('Below is an instruction that describes a task. Write a response that appropriately completes the request.',random.choice(instruct_variants))
+        #Replace input
+        prompt      = prompt.replace("### Instruction:\n",'')
+        prompt      = prompt.replace('### Input:',random.choice(input_variants))
+
+        prompt      = random.choice(instruct_variants) + '\n' + data['instruction'] + '\n' + random.choice(input_variants) + "\n"
+        prompt      = prompt + data['input']
+
+        example     = f"{PROMPT_TOKEN}{prompt}{RESPONSE_TOKEN}{data['output']}"
+
+        small_dataset.append(f"{example}")
+
+    with open("finetune/code_alpaca.json",'w',encoding='utf_8') as wf:
+        wf.write(json.dumps(small_dataset))
+        print(f"wrote {len(small_dataset)} samples")
+
+#Add all currently used datasets into "finetune1.json"
 def compile_dataset():
 
     full_dataset    = []
-    for source in ["baize.json","dolly.json","eli5.json","nq.json"]:
+    for source in ["baize.json","eli5.json","nq.json",'reddit.json']:
         with open(os.path.join("finetune",source),'r',encoding='utf_8') as rf:
             samples     = json.loads(rf.read())
         
         for data in samples:
-            data        = [" ".join(data[i]) for i in range(len(data))]  
             full_dataset.append(data)
 
     with open(f"finetune/finetune1.json",'w',encoding='utf_8') as wf:
@@ -120,10 +216,17 @@ def load_nq():
 
 
 if __name__ == "__main__":  
+    build_code_alpaca()
+    exit()
+    build_nq()
+    build_baize()
+    build_reddit()
+    build_eli5()
+    compile_dataset()
     #data = build_nq("train")
     #build_dolly()
     #build_baize()
     #build_eli5()
     #build_trivia()
     #load_nq()
-    compile_dataset()
+    #compile_dataset()

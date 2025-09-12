@@ -5,7 +5,9 @@ from torch.nn.utils.rnn import pad_sequence
 import numpy
 import os 
 import random 
-from utils import SPECIAL_TOKENS, PROMPT_TOKEN, RESPONSE_TOKEN, RESERVE_1
+import sys
+sys.path.append("C:gitrepos/cloudGPT")
+from utils import SPECIAL_TOKENS, PROMPT_TOKEN, RESPONSE_TOKEN, RESERVE_1, END_TOKEN
 import torch
 import json
 import numpy 
@@ -146,6 +148,7 @@ class FinetuneTokenizer(ByteLevelBPETokenizer):
 
         self.base_tokenizer     = tokenizer
         self.pad_tok            = self.base_tokenizer.encode(padding_tok).ids[0]
+        self.eos_token_id       = self.base_tokenizer.encode(END_TOKEN).ids[0]
         self.max_len            = max_len
 
     def tokenize(self,text:str):
@@ -176,11 +179,13 @@ class FinetuneDataset(Dataset):
         with open(json_path, "r", encoding="utf-8") as f:
             raw_data = json.load(f)
             old_len     = len(raw_data)
-            raw_data    = [item for item in raw_data if len(item) == 2]
-            print(f"reduction to {100*len(raw_data)/old_len}")
+            #raw_data    = [item for item in raw_data if len(item) == 2]
+            #print(f"reduction to {100*len(raw_data)/old_len}")
 
         if data_cap < len(raw_data):
             random.shuffle(raw_data)
+
+        raw_data            = raw_data[:data_cap]
 
         self.tokenizer      = tokenizer
         self.pad_token_id   = tokenizer.pad_tok
@@ -188,23 +193,52 @@ class FinetuneDataset(Dataset):
 
         # Pre-tokenize and store lengths
         self.data           = []
-        
 
-        for prompt, reply in raw_data[:data_cap]:
-            tokens      = torch.tensor(tokenizer.tokenize(self.format_text(prompt,reply))).long()
-            self.data.append({'input_ids':tokens,"length":len(tokens)})
+        #INCREASE TO SIZE 
+        #self.concat         = f'{END_TOKEN}'.join(raw_data)
+        cur_i               = 0 
+        batches             = self.pack_examples(raw_data,self.tokenizer,2048)
+
+        # while cur_i < len(self.concat):
+        #     chunk           = self.concat[cur_i:cur_i+max_length]
+        #     tokens      = torch.tensor(tokenizer.tokenize(chunk)).long()
+
+        for item in batches:
+            
+            tokens      = torch.tensor(item).long()
+            input_ids   = tokens[:-1]
+            target_ids  = tokens[1:]
+            attn_mask   = torch.ones_like(input_ids).bool()
+            self.data.append({'input_ids':input_ids,"target_ids":target_ids,"attn_mask":attn_mask,"length":len(tokens)})
 
         # Sort by length for bucketing
         self.data.sort(key=lambda x: x["length"])
+    
+    @staticmethod
+    def pack_examples(dataset, tokenizer, max_len=2048):
+        buffer = []
+        batches = []
+        cur_len = 0
 
+        for ex in dataset:
+            ids = tokenizer.tokenize(ex) + [tokenizer.eos_token_id]
+            if cur_len + len(ids) > max_len:
+                batches.append(buffer)
+                buffer = []
+                cur_len = 0
+            buffer.extend(ids)
+            cur_len += len(ids)
+
+        if buffer:  # flush remainder
+            batches.append(buffer)
+        return batches
+    
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
-        return self.data[idx]["input_ids"]
+        return self.data[idx]["input_ids"], self.data[idx]["target_ids"], self.data[idx]["attn_mask"],
 
-    def format_text(self,prompt:str,response:str):
-        return f"{PROMPT_TOKEN}{prompt}{PROMPT_TOKEN}{RESPONSE_TOKEN}{response}{RESPONSE_TOKEN}"
 
 class BucketedBatchSampler(Sampler):
     def __init__(self, dataset, batch_size, bucket_size=200):

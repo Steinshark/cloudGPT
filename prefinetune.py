@@ -144,62 +144,80 @@ def generate_finetune_prompts():
 
 if __name__ == '__main__':
 
-    LR          = 1e-5
-    WD          = 1e-3
+    LR          = 5e-5
+    WD          = 1e-4
     EP          = 3
     BS          = 1
     ACCU        = 256
-    SAVE        = 50
+    SAVE        = 32
+    STEP_EVERY  = ACCU / BS
 
     #Load tokenizer
-    tokenizer   = load_tokenizer('tokenizer')
+    fpath_tok   = "C:/gitrepos/cloudGPT/tokenizer"
+    tokenizer   = load_tokenizer(fpath_tok)
     ftt         = FinetuneTokenizer(tokenizer,2048,RESERVE_1)
     VS          = ftt.base_tokenizer.get_vocab_size()
-    fname       = 'finetune/finetune1.json'
-    dataset     = FinetuneDataset(fname, ftt,data_cap=1024*1024)
+    fname       = 'C:/gitrepos/cloudGPT/finetune/finetune1.json'
+    dataset     = FinetuneDataset(fname, ftt)
 
-    sampler     = BucketedBatchSampler(dataset, batch_size=BS, bucket_size=200)
+    #sampler     = BucketedBatchSampler(dataset, batch_size=BS, bucket_size=200)
 
-    loader      = DataLoader(dataset,batch_sampler=sampler,collate_fn=lambda x: collate_fn(x, dataset.pad_token_id))
+    #loader      = DataLoader(dataset,batch_sampler=sampler,collate_fn=lambda x: collate_fn(x, dataset.pad_token_id))
+    loader      = DataLoader(dataset,batch_size=1,shuffle=True)
 
-    lm_model    = LMSteinshark.from_loadpoint("D:/production").bfloat16().cuda()
-    lm_model.name = "finetune0"
+    lm_model    = LMSteinshark.from_loadpoint("D:/nlp/models/PretrainLMSteinshark",p_override=.1).bfloat16().cuda()
+    lm_model.name = "PreFinetune"
     optim       = torch.optim.AdamW(lm_model.parameters(),lr=LR,weight_decay=WD)
     save_count  = 0
+    accumulation_loss = 0
 
     for ep in range(EP):
         c_loss  = 0 
 
         for i,batch in enumerate(loader):
-            
-            input_ids           = batch["input_ids"].cuda()
-            target_ids          = batch["target_ids"].cuda()
-            attn_mask           = batch["attention_mask"].cuda()
+            input_ids           = batch[0].cuda()
+            target_ids          = batch[1].cuda()
+            attn_mask           = batch[2].cuda()
 
-            #input(f"{input_ids.shape}\n{target_ids.shape}\n{attn_mask.shape}")
             logits,target_ids   = lm_model.forward(input_ids,target_ids,attn_mask)
 
             logits              = logits.view(target_ids.size(0)*target_ids.size(1),VS)
             targets             = target_ids.view(target_ids.size(0)*target_ids.size(1))
 
-            loss                = torch.nn.functional.cross_entropy(logits,targets) / (ACCU // BS)
-            c_loss              += loss
+            loss                = torch.nn.functional.cross_entropy(logits,targets,ignore_index=ftt.pad_tok)
+            accumulation_loss   += loss.item()
             loss.backward()
 
-            if ((i + 1) % (ACCU // BS)) == 0:
+            if ((i + 1) % (STEP_EVERY)) == 0:
+                for p in lm_model.parameters():
+                    if p.grad is not None:
+                        p.grad.div_(STEP_EVERY)
+
+
                 torch.nn.utils.clip_grad_norm_(lm_model.parameters(),MAX_NORM)
                 optim.step()
                 optim.zero_grad()
-                print(f"EP {ep}\t[{i+1}\t/{len(loader)}] -\t{c_loss.float()}")
+                accumulation_loss /= STEP_EVERY
+                print(f"EP {ep}\t[{i+1}\t/{len(loader)}] -\t{accumulation_loss}")
                 c_loss          = 0 
 
                 if (save_count % SAVE) == 0:
-                    lm_model.save(save_weights=True)
+                    lm_model.stats['losses'].append(accumulation_loss)
+                    lm_model.name = f"PreFinetune{save_count}"
+                    lm_model.save(save_weights=True,root='D:/nlp/models')
                     print(f"\tsaving {lm_model.name}")
-                    torch.cuda.empty_cache()
                 
                 save_count += 1 
+                torch.cuda.empty_cache()
 
+            tot_tok_thru    = attn_mask.int().sum().item()
 
-                   
+            #Update stats 
+            lm_model.stats['run_tok_through'] += tot_tok_thru
+            lm_model.stats['run_iter_through'] += 1
+
+            lm_model.stats['tok_through'] += tot_tok_thru
+            lm_model.stats['iter_through'] += 1
+
             
+        print(f"\n\nEP {ep} complete\n\n")

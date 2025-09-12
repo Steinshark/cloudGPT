@@ -139,6 +139,26 @@ def generate_finetune_prompts():
     #return a stream of tokens 
     return samples
 
+def create_responses():
+    model           = LMSteinshark.from_loadpoint("config_path",p_override=0).bfloat16().cuda().eval()
+    tokenizer       = load_tokenizer("C:/gitrepos/cloudgpt/tokenizer")
+
+    prompts         = open("finetune/rlhf_promtps.txt",'r',encoding='utf_8').readlines()
+
+    data            = {prompt:[] for prompt in prompts}
+
+    for prompt in data:
+
+        for _ in range(10):
+            token_ids   = tokenizer.encode(prompt).ids 
+
+            response    = ""
+            for tok in model.token_streamer(prompt,tokenizer,2048,.6,topk=150,topp=.5):
+                response += tok 
+            
+            data[prompt].append(response)
+            
+
 
 
 

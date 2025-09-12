@@ -16,10 +16,11 @@ class ModelTesterApp(tk.Tk):
         self.tokenizer = None
         self._create_widgets()
 
-        self.load_model(filepath="C:/data/nlp/models/finetune0/model_weights.pth")
+        model_p     = "C:/data/nlp/models/finetune0/model_weights.pth"
+        model_p     = "D:/nlp/models/PreFinetune224/model_weights.pth"
+        self.load_model(filepath=model_p)
         self.load_tokenizer(tokenizer_dir="C:/gitrepos/cloudgpt/tokenizer")
 
-        self.p_mode     = True 
         
 
     def _create_widgets(self):
@@ -68,8 +69,14 @@ class ModelTesterApp(tk.Tk):
         tm_frame.pack(fill='x', padx=5, pady=5)
         #ttk.Label(tm_frame, text="top_p:").pack(side='left')
         #self.mode_var = tk.StringVar(value="")
-        self.mode_box   = ttk.Checkbutton(tm_frame,text='P mode',command=lambda: self.toggle_mode())
+        self.p_mode_var     = tk.BooleanVar()
+        self.mode_box   = ttk.Checkbutton(tm_frame,text='P mode',variable=self.p_mode_var)
         self.mode_box.pack(side='left',padx=5)
+
+        self.basemodel_var  = tk.BooleanVar()
+        self.base_box   = ttk.Checkbutton(tm_frame,text='Base Model',variable=self.basemodel_var)
+        self.base_box.pack(side='left',padx=5)
+        
         #self.mode_entry = ttk.Entry(tm_frame, textvariable=self.mode_var, width=10)
         #self.mode_entry.pack(side='left', padx=5)
 
@@ -85,9 +92,6 @@ class ModelTesterApp(tk.Tk):
         self.generate_btn = ttk.Button(btn_frame, text="Generate", command=self.start_generation_thread)
         self.generate_btn.pack(side='right', padx=5)
 
-    def toggle_mode(self):
-        self.p_mode = not self.p_mode
-        print(f"set P mode -> {self.p_mode}")
 
     def load_model(self,filepath=None):
         if filepath is None:
@@ -125,7 +129,11 @@ class ModelTesterApp(tk.Tk):
         threading.Thread(target=self.generate_response, daemon=True).start()
 
     def generate_response(self):
-        prompt = self.tokenizer.encode(f"{PROMPT_TOKEN}{self.prompt_text.get('1.0', tk.END).strip()}{PROMPT_TOKEN}{RESPONSE_TOKEN}").ids
+
+        prompt  = f"{self.prompt_text.get('1.0', tk.END).strip()}"
+
+        if not self.basemodel_var.get():
+            prompt = f"{PROMPT_TOKEN}{prompt}{PROMPT_TOKEN}{RESPONSE_TOKEN}"
         try:
             temperature = float(self.temp_var.get())
             n_tokens = int(self.n_tokens_var.get())
@@ -142,7 +150,7 @@ class ModelTesterApp(tk.Tk):
 
         # Call your model's token_streamer and append tokens as they come
         try:
-            for token in self.model.token_streamer(prompt, self.tokenizer, n_tokens, temperature, top_k,top_p,mode='p' if self.p_mode else 'k'):
+            for token in self.model.token_streamer(prompt, self.tokenizer, n_tokens, temperature, top_k,top_p,mode='p' if self.p_mode_var.get() else 'k',verbose=True):
                 # Insert token in the GUI thread
                 self.response_text.after(0, self._append_token, token)
         except Exception as e:

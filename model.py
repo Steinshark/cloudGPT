@@ -11,38 +11,28 @@ from utils import END_TOKEN,PROMPT_TOKEN,RESPONSE_TOKEN
 
 os.environ['TORCH_USE_CUDA_DSA'] = "True"
 
-def top_p(x:torch.Tensor,p=.80):
+def top_p(x:torch.Tensor,p=.80,min_override=10,verbose=False):
     
     #Make them numpy
-    prob,idx    = torch.topk(x,x.size(-1))
-    prob        = prob.cpu().numpy()
-    idx         = idx.cpu().numpy() 
+    prob,idx        = torch.sort(x,descending=True)
 
-    #Shift to positive
-    min_p       = min(prob.flatten())
-    if min_p < 0:
-        prob    = prob - min_p
-    thresh      = p * sum(prob.flatten())
-    
+    cumsum_probs    = torch.cumsum(prob,dim=0)
 
-    i           = 0
-    new_probs   = [] 
-    new_idx     = [] 
-    cum_p       = 0 
-    while cum_p < thresh:
-        
-        cum_p   += prob[i]
-        
-        new_probs.append(prob[i])
-        new_idx.append(idx[i])
-        i += 1
-    
-    new_probs   = torch.tensor(new_probs)
-    new_idx     = torch.tensor(new_idx)
-    return new_probs, new_idx
+    mask            = cumsum_probs >= p
+    cutoff          = torch.argmax(mask.int()).item() + 1 
+    cutoff          = max(cutoff,min_override)
+
+    top_probs       = prob[:cutoff]
+    top_idx         = idx[:cutoff]
+
+    top_probs       = top_probs / top_probs.sum()
+
+    if verbose:
+        print(f"\t{cutoff} choices")
+
+    return top_probs, top_idx
 
 
-    pass 
 
 
 #Used to apply RoPE to MHA
@@ -350,8 +340,18 @@ class LMSteinshark(torch.nn.Module):
         model.load_state_dict(torch.load(weights_path, map_location=model.device),strict=False)
 
         print(f"[INFO] Loaded LMSteinshark from {load_path} with {model.n_params:,} parameters.\n")
-
+        model.stats['run_tok_through'] = 0 
+        model.stats['run_iter_through'] = 0
+        model.stats['run_time_start'] = time.time()
         return model
+
+    @staticmethod
+    def fetch_stats(load_path:str):
+        config_path = os.path.join(load_path, "model_config.json")
+        with open(config_path, "r") as f:
+            metadata = json.load(f)
+        
+        return metadata
 
 
     def set_generate_mode(self):
@@ -402,34 +402,45 @@ class LMSteinshark(torch.nn.Module):
         return model_output
 
 
-    def token_streamer(self,prompt:list[int],tokenizer:ByteLevelBPETokenizer,n_tokens=128,temperature=.7,topk=100,topp=.8,mode='p'):
-        with torch.no_grad():
+    def token_streamer(self,prompt:str|list[int],tokenizer:ByteLevelBPETokenizer,n_tokens=128,temperature=.7,topk=100,topp=.8,mode='p',verbose=False,tokenized=False):
+        with torch.inference_mode():
             self.set_generate_mode()
-            full_token_list         = prompt
+
+            #Handle pre-tokenized prompts (used for some padding)
+            if not tokenized:
+                full_token_list         = tokenizer.encode(prompt).ids
+            else:
+                full_token_list         = prompt 
+                print(prompt)
+
             generated_token_list    = []
 
             while len(generated_token_list) < n_tokens:
 
                 #Get model output
-                model_input         = torch.tensor(full_token_list).cuda().long().unsqueeze(dim=0)  
+                model_input         = torch.tensor(full_token_list).cuda().long()
+                if model_input.ndim == 1:
+                    model_input = model_input.unsqueeze(dim=0)  
+
                 attn_mask           = torch.ones_like(model_input).cuda().bool()
                 placeholder_ids     = torch.zeros_like(model_input).cuda().long()
                 logits,_            = self(model_input,placeholder_ids,attn_mask)
 
                 logits              = logits[0,-1,:].float()
                 logits              = logits / temperature
+                probs               = torch.nn.functional.softmax(logits,dim=-1)
 
                 if mode == 'p':
-                    probs,idx       = top_p(logits,topp)
-                elif mode == 'k': 
-                    probs,idx       = torch.topk(logits,k=topk)
+                    probs,idx       = top_p(probs,topp,verbose=verbose)
 
-                distribution        = torch.nn.functional.softmax(probs,dim=-1)
-                local_i             = torch.distributions.Categorical(probs=distribution).sample()
+                elif mode == 'k': 
+                    probs,idx       = torch.topk(probs,k=topk)
+
+                local_i             = torch.distributions.Categorical(probs=probs).sample()
                 next_token          = idx[local_i]
 
                 #Check if end of sequence
-                if next_token in tokenizer.encode("".join([PROMPT_TOKEN,RESPONSE_TOKEN])).ids:
+                if next_token in tokenizer.encode("".join([PROMPT_TOKEN,RESPONSE_TOKEN,END_TOKEN])).ids:
                     break
                 else:
                     full_token_list.append(next_token)
@@ -439,6 +450,8 @@ class LMSteinshark(torch.nn.Module):
         self.set_train_mode()
         return 
 
+    def batched_token_streamer(self,prompt:str|list[int],tokenizer:ByteLevelBPETokenizer,n_tokens=128,temperature=.7,topk=100,topp=.8,mode='p',verbose=False):
+        pass 
 
     def model_info(self) -> str:
         info    = f"Model:\t{self.name}\n"
