@@ -37,6 +37,18 @@ prompt_templates = [
     "Offer an objective overview of {subject}.",
     "Explain {subject} in a factual, unbiased way.",
     "Give a clear and accurate summary of {subject}.",
+    "Tell me more about {subject}",
+    "Talk about {subject}",
+    "What is {subject}",
+    "Talk about {subject}",
+    "What are some facts about {subject}?",
+    "What can you tell me about {subject}?",
+    "{subject}",
+    "{subject} - talk about this.",
+    "I'm curious about {subject}",
+    "I want to know about {subject}.",
+    "Tell me about {subject}",
+    "Give some info on {subject}"
 ]
 
 
@@ -66,7 +78,7 @@ def generate_qa_from_wiki(title, text):
     lines = text.split("\n")
     for line in lines:
         if len(line.strip()) > 40:  # skip very short lines
-            prompt = random.sample(prompt_templates).replace('{subject}',title)
+            prompt = random.choice(prompt_templates).replace('{subject}',title)
             response = line.strip()
             yield f"{PROMPT_TOKEN}{prompt}{RESPONSE_TOKEN}{response}"
 
@@ -75,12 +87,15 @@ def generate_qa_from_wiki(title, text):
 # ---------------------------
 
 def factual_dataset_pipeline(wiki_dump_path, output_file, limit=None):
+    i = 0
     with open(output_file, "w", encoding="utf-8") as out_f:
         for title, text in yield_wikipedia_articles(wiki_dump_path):
             for qa in generate_qa_from_wiki(title, text):
-                input(qa)
                 out_f.write(json.dumps(qa) + "\n")
-
+                i += 1 
+                if not limit is None and i > limit:
+                    out_f.close()
+                    return 
 # ---------------------------
 # Optional QA dataset merging
 # ---------------------------
@@ -90,7 +105,7 @@ def merge_nq_dataset(output_file):
     nq = load_dataset("natural_questions", "default")
     with open(output_file, "a", encoding="utf-8") as out_f:
         for split in ["train", "validation"]:
-            for example in nq[split]:
+            for example in nq[split][:4]:
                 question = example["question_text"]
                 answer = " ".join([a["text"] for a in example["annotations"][0]["short_answers"]])
                 if len(answer.strip()) > 0:
@@ -98,11 +113,11 @@ def merge_nq_dataset(output_file):
                     out_f.write(json.dumps(qa) + "\n")
 
 
-wiki_dump = "Steinpc/s/nlp/data/enwiki-20250401-pages-articles-multistream.xml.bz2"
-output_file = "Steinpc/s/nlp/data/factual_dataset.jsonl"
+wiki_dump = "//Steinpc/s/nlp/data/enwiki-20250401-pages-articles-multistream.xml.bz2"
+output_file = "//Steinpc/s/nlp/data/factual_dataset.jsonl"
 
 # Generate Wikipedia-based QA
-factual_dataset_pipeline(wiki_dump, output_file, limit=100_000)  # limit optional
+factual_dataset_pipeline(wiki_dump, output_file)  # limit optional
 
-# Merge Natural Questions
-merge_nq_dataset(output_file)
+# # Merge Natural Questions
+# merge_nq_dataset(output_file)

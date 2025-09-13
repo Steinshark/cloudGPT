@@ -16,10 +16,10 @@ class ModelTesterApp(tk.Tk):
         self.tokenizer = None
         self._create_widgets()
 
-        model_p     = "C:/data/nlp/models/finetune0/model_weights.pth"
-        model_p     = "D:/nlp/models/PreFinetune224/model_weights.pth"
+        model_p     = r"//Steinpc/s/data/nlp/models/finetune0/model_weights.pth"
+        model_p     = r"//Steinpc/s/nlp/models/PreFinetune320/model_weights.pth"
         self.load_model(filepath=model_p)
-        self.load_tokenizer(tokenizer_dir="C:/gitrepos/cloudgpt/tokenizer")
+        self.load_tokenizer(tokenizer_dir=r"//Steinpc/s/nlp/tokenizer")
 
         
 
@@ -133,7 +133,7 @@ class ModelTesterApp(tk.Tk):
         prompt  = f"{self.prompt_text.get('1.0', tk.END).strip()}"
 
         if not self.basemodel_var.get():
-            prompt = f"{PROMPT_TOKEN}{prompt}{PROMPT_TOKEN}{RESPONSE_TOKEN}"
+            prompt = f"{PROMPT_TOKEN}{prompt}{RESPONSE_TOKEN}"
         try:
             temperature = float(self.temp_var.get())
             n_tokens = int(self.n_tokens_var.get())
