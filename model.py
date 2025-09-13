@@ -211,6 +211,18 @@ class LMSteinshark(torch.nn.Module):
 
         return logits, target_ids
 
+    def forward_no_head(self,input_ids:torch.Tensor,target_ids:torch.Tensor,attn_mask:torch.Tensor=None)->tuple[torch.Tensor, torch.Tensor]:
+
+        x                               = self.embeddings(input_ids)
+
+        #Pass through transformer stack
+        for layer in self.transformer_stack:
+            x                               = layer(x,attn_mask)
+
+        x                               = self.output_ln(x)
+
+        return x
+
    
     def initialize_weights(self):
         for param in self.parameters():
@@ -413,7 +425,6 @@ class LMSteinshark(torch.nn.Module):
                 full_token_list         = tokenizer.encode(prompt).ids
             else:
                 full_token_list         = prompt 
-                print(prompt)
 
             generated_token_list    = []
 

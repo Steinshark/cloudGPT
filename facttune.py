@@ -96,22 +96,6 @@ def factual_dataset_pipeline(wiki_dump_path, output_file, limit=None):
                 if not limit is None and i > limit:
                     out_f.close()
                     return 
-# ---------------------------
-# Optional QA dataset merging
-# ---------------------------
-
-def merge_nq_dataset(output_file):
-    # Using Huggingface Natural Questions dataset
-    nq = load_dataset("natural_questions", "default")
-    with open(output_file, "a", encoding="utf-8") as out_f:
-        for split in ["train", "validation"]:
-            for example in nq[split][:4]:
-                question = example["question_text"]
-                answer = " ".join([a["text"] for a in example["annotations"][0]["short_answers"]])
-                if len(answer.strip()) > 0:
-                    qa = {"prompt": question, "response": answer.strip()}
-                    out_f.write(json.dumps(qa) + "\n")
-
 
 wiki_dump = "//Steinpc/s/nlp/data/enwiki-20250401-pages-articles-multistream.xml.bz2"
 output_file = "//Steinpc/s/nlp/data/factual_dataset.jsonl"

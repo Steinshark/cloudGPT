@@ -23,14 +23,14 @@ RESERVE_1           = '<|reserve1|>'
 RESERVE_2           = '<|reserve2|>'
 
 
-SPECIAL_TOKENS      = [END_TOKEN,
-                       CODE_TOKEN,
-                       RUNCODE_TOKEN,
-                       WEB_TOKEN,
-                       PROMPT_TOKEN,
-                       RESPONSE_TOKEN,
-                       RESERVE_1,
-                       RESERVE_2]
+SPECIAL_TOKENS      = {"eot":END_TOKEN,
+                       "code":CODE_TOKEN,
+                       "runcode":RUNCODE_TOKEN,
+                       "web":WEB_TOKEN,
+                       "prompt":PROMPT_TOKEN,
+                       "resp":RESPONSE_TOKEN,
+                       "r1":RESERVE_1,
+                       "r2":RESERVE_2}
 
 # Generate 100 unique, varied refutation phrases to answer unanswerable SQuAD2.0-style questions
 refuatations = [

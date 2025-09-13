@@ -15,7 +15,10 @@ import numpy
 #Loads a tokenizer from f_root
 def load_tokenizer(f_root:str)->ByteLevelBPETokenizer:
     tokenizer               = ByteLevelBPETokenizer().from_file(vocab_filename=f"{f_root}/vocab.json",merges_filename=f"{f_root}/merges.txt")
-    tokenizer.add_tokens(SPECIAL_TOKENS)
+    tokenizer.add_tokens(list(SPECIAL_TOKENS.values()))
+
+    tokenizer.special_tokens    = SPECIAL_TOKENS
+
     return tokenizer
 
 
@@ -174,6 +177,8 @@ class FinetuneTokenizer(ByteLevelBPETokenizer):
 
 
 
+#Finetune dataset accepts any 'json_path' that points to a jsonable_file yielding an iterable of strings
+# in the format '<prompt>...<response>...' 
 class FinetuneDataset(Dataset):
     def __init__(self, json_path, tokenizer:FinetuneTokenizer, max_length=2048,data_cap=1_000_000):
         with open(json_path, "r", encoding="utf-8") as f:
