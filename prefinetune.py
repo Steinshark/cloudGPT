@@ -147,20 +147,21 @@ if __name__ == '__main__':
     LR                  = 5e-5
     WD                  = 1e-4
     EP                  = 3
-    BS                  = 1
-    ACCU                = (16*1024) // 2048
+    BS                  = 32
+    ACCU                = (64*1024) // 2048
     SAVE                = 1
-    STEP_EVERY          = ACCU / BS
+    STEP_EVERY          = ACCU // BS
+    CONTEXT             = 1024
 
     #Load tokenizer
     fpath_tok           = f"{ENV_PREFIX}/tokenizer"
     tokenizer           = load_tokenizer(fpath_tok)
-    ftt                 = FinetuneTokenizer(tokenizer,2048,RESERVE_1)
+    ftt                 = FinetuneTokenizer(tokenizer,CONTEXT,RESERVE_1)
     VS                  = ftt.base_tokenizer.get_vocab_size()
 
     #Load data
     fname               = f'{ENV_PREFIX}/data/factual_dataset_select.jsonl'
-    dataset             = FinetuneDataset(fname, ftt,data_cap=1024)
+    dataset             = FinetuneDataset(fname, ftt,data_cap=16*1024)
     loader              = DataLoader(dataset,batch_size=BS,shuffle=True)
 
     #Load model
@@ -184,6 +185,7 @@ if __name__ == '__main__':
             attn_mask           = batch[2].cuda()
 
             #Send it forward
+            #input(f"Shapes:\n{input_ids.shape}\n{target_ids.shape}\n{attn_mask.shape}")
             logits,target_ids   = lm_model.forward(input_ids,target_ids,attn_mask)
 
             #Shape it up
@@ -191,7 +193,7 @@ if __name__ == '__main__':
             targets             = target_ids.view(target_ids.size(0)*target_ids.size(1))
             
             #Calculate loss -> grads will be divided by STEP_EVERY once right before stepping
-            loss                = torch.nn.functional.cross_entropy(logits,targets,ignore_index=ftt.pad_tok)
+            loss                = torch.nn.functional.cross_entropy(logits,targets,ignore_index=ftt.pad_token_id)
             accumulation_loss   += loss.item()
             loss.backward()
 
@@ -228,3 +230,4 @@ if __name__ == '__main__':
 
             
         print(f"\n\nEP {ep} complete\n\n")
+        lm_model.save(save_weights=True,root=f'{ENV_PREFIX}/models')

@@ -150,7 +150,7 @@ class FinetuneTokenizer(ByteLevelBPETokenizer):
     def __init__(self,tokenizer:ByteLevelBPETokenizer,max_len:int=2048,padding_tok=RESERVE_1):
 
         self.base_tokenizer     = tokenizer
-        self.pad_tok            = self.base_tokenizer.encode(padding_tok).ids[0]
+        self.pad_token_id       = self.base_tokenizer.encode(padding_tok).ids[0]
         self.eos_token_id       = self.base_tokenizer.encode(END_TOKEN).ids[0]
         self.max_len            = max_len
 
@@ -167,7 +167,7 @@ class FinetuneTokenizer(ByteLevelBPETokenizer):
         batch_len               = max(seq_lens)
         mask                    = numpy.zeros(shape=(len(batch_tokens),batch_len),dtype=numpy.int16)
         tokens                  = numpy.zeros_like(mask,dtype=numpy.int16)
-        tokens[:,:]             = self.pad_tok                  
+        tokens[:,:]             = self.pad_token_id                  
 
         for i,seq_len in enumerate(seq_lens):
             tokens[i,:seq_len]  = batch_tokens[i]   #fill tokens
@@ -197,7 +197,7 @@ class FinetuneDataset(Dataset):
 
         #Create vars 
         self.tokenizer      = tokenizer
-        self.pad_token_id   = tokenizer.pad_tok
+        self.pad_token_id   = tokenizer.pad_token_id
         self.max_length     = max_length
         self.data           = [] 
 
@@ -212,7 +212,7 @@ class FinetuneDataset(Dataset):
             input_ids   = tokens[:-1]
             target_ids  = tokens[1:]
             
-            attn_mask   = torch.zeros(size=(2048,)).bool()
+            attn_mask   = torch.zeros(size=(max_length,)).bool()
             attn_mask[:input_ids.size(0)] = 1
             self.data.append({'input_ids':input_ids,"target_ids":target_ids,"attn_mask":attn_mask,"length":len(tokens)})
 
@@ -228,11 +228,19 @@ class FinetuneDataset(Dataset):
         for ex in dataset:
             ids = tokenizer.tokenize(ex) + [tokenizer.eos_token_id]
             if cur_len + len(ids) > max_len:
+                
+                #buff it out to padded length
+                while len(buffer) < max_len:
+                    buffer.append(tokenizer.pad_token_id)
+
+                
                 batches.append(buffer)
                 buffer = []
                 cur_len = 0
             buffer.extend(ids)
             cur_len += len(ids)
+
+
 
         if buffer:  # flush remainder
             batches.append(buffer)
