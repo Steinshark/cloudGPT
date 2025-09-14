@@ -11,7 +11,7 @@ PREV_RUNS               = f"prev"
 
 MODELS                  = f"models"
 
-
+ENV_PREFIX              = f"/home/ubuntu/FactTune/nlp"
 
 for fpath in [TOK_PATH,PREV_RUNS,MODELS]:
     if not os.path.exists(fpath):

@@ -2,7 +2,7 @@ from model import LMSteinshark
 from data import *
 from torch.utils.data import Dataset, DataLoader
 from utils import END_TOKEN,PROMPT_TOKEN,RESPONSE_TOKEN,SPECIAL_TOKENS,RESERVE_1
-from environment import MAX_NORM
+from environment import MAX_NORM, ENV_PREFIX
 from tokenizers.implementations import ByteLevelBPETokenizer as BPET
 import random 
 import torch 
@@ -148,23 +148,23 @@ if __name__ == '__main__':
     WD                  = 1e-4
     EP                  = 3
     BS                  = 1
-    ACCU                = (1024*1024) // 2048
-    SAVE                = 32
+    ACCU                = (16*1024) // 2048
+    SAVE                = 1
     STEP_EVERY          = ACCU / BS
 
     #Load tokenizer
-    fpath_tok           = "//Steinpc/s/nlp/tokenizer"
+    fpath_tok           = f"{ENV_PREFIX}/tokenizer"
     tokenizer           = load_tokenizer(fpath_tok)
     ftt                 = FinetuneTokenizer(tokenizer,2048,RESERVE_1)
     VS                  = ftt.base_tokenizer.get_vocab_size()
 
     #Load data
-    fname               = '//Steinpc/s/nlp/data/factual_dataset_select.jsonl'
-    dataset             = FinetuneDataset(fname, ftt)
+    fname               = f'{ENV_PREFIX}/data/factual_dataset_select.jsonl'
+    dataset             = FinetuneDataset(fname, ftt,data_cap=1024)
     loader              = DataLoader(dataset,batch_size=BS,shuffle=True)
 
     #Load model
-    model_loadpoint     = "//Steinpc/s/nlp/models/PreTrainLMSteinshark"
+    model_loadpoint     = f"{ENV_PREFIX}/models/PreTrainLMSteinshark"
     lm_model            = LMSteinshark.from_loadpoint(model_loadpoint,p_override=.1).bfloat16().cuda()
     lm_model.name       = "FactTune"
 
@@ -211,7 +211,7 @@ if __name__ == '__main__':
                 if (save_count % SAVE) == 0:
                     lm_model.stats['losses'].append(accumulation_loss)
                     lm_model.name = f"PreFinetune{save_count}"
-                    lm_model.save(save_weights=True,root='D:/nlp/models')
+                    lm_model.save(save_weights=True,root=f'{ENV_PREFIX}/models')
                     print(f"\tsaving {lm_model.name}")
                 
                 save_count += 1 
