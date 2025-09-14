@@ -144,11 +144,11 @@ def generate_finetune_prompts():
 
 if __name__ == '__main__':
 
-    LR                  = 2e-5
-    WD                  = 1e-4
+    LR                  = 1e-4
+    WD                  = 5e-3
     EP                  = 3
     BS                  = 16
-    ACCU                = (1024*1024) // 2048
+    ACCU                = (1024*1024) // 1024
     SAVE                = 16
     STEP_EVERY          = ACCU // BS
     CONTEXT             = 1024
@@ -161,7 +161,7 @@ if __name__ == '__main__':
 
     #Load data
     fname               = f'{ENV_PREFIX}/data/factual_dataset_select.jsonl'
-    dataset             = FinetuneDataset(fname, ftt,data_cap=32*1024)
+    dataset             = FinetuneDataset(fname, ftt)
     loader              = DataLoader(dataset,batch_size=BS,shuffle=True)
 
     #Load model
