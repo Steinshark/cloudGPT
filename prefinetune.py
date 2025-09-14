@@ -144,12 +144,12 @@ def generate_finetune_prompts():
 
 if __name__ == '__main__':
 
-    LR                  = 5e-5
+    LR                  = 2e-5
     WD                  = 1e-4
     EP                  = 3
     BS                  = 16
-    ACCU                = (64*1024) // 2048
-    SAVE                = 8
+    ACCU                = (1024*1024) // 2048
+    SAVE                = 16
     STEP_EVERY          = ACCU // BS
     CONTEXT             = 1024
 
@@ -161,7 +161,7 @@ if __name__ == '__main__':
 
     #Load data
     fname               = f'{ENV_PREFIX}/data/factual_dataset_select.jsonl'
-    dataset             = FinetuneDataset(fname, ftt,data_cap=16*1024)
+    dataset             = FinetuneDataset(fname, ftt,data_cap=32*1024)
     loader              = DataLoader(dataset,batch_size=BS,shuffle=True)
 
     #Load model
@@ -173,6 +173,10 @@ if __name__ == '__main__':
     optim               = torch.optim.AdamW(lm_model.parameters(),lr=LR,weight_decay=WD)
     save_count          = 0
     accumulation_loss   = 0
+    
+    #Train
+    for p in lm_model.parameters():
+        p.requires_grad_(True)
 
     for ep in range(EP):
         c_loss  = 0 
@@ -183,8 +187,8 @@ if __name__ == '__main__':
             input_ids           = batch[0].cuda()
             target_ids          = batch[1].cuda()
             attn_mask           = batch[2].cuda()
-            input(f"train on {tokenizer.decode(input_ids[0][:16].cpu().numpy())}")
-            input(f"train on {tokenizer.decode(target_ids[0][:16].cpu().numpy())}")
+            #input(f"train on {tokenizer.decode(input_ids[0][:16].cpu().numpy())}")
+            #input(f"train on {tokenizer.decode(target_ids[0][:16].cpu().numpy())}")
             #Send it forward
             #input(f"Shapes:\n{input_ids.shape}\n{target_ids.shape}\n{attn_mask.shape}")
             logits,target_ids   = lm_model.forward(input_ids,target_ids,attn_mask)
