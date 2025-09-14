@@ -212,8 +212,8 @@ class FinetuneDataset(Dataset):
             input_ids   = tokens[:-1]
             target_ids  = tokens[1:]
             
-            attn_mask   = torch.zeros(size=(max_length,)).bool()
-            attn_mask[:input_ids.size(0)] = 1
+            attn_mask   = torch.ones(size=(max_length,)).bool()
+            attn_mask[input_ids == self.tokenizer.pad_token_id] = False
             self.data.append({'input_ids':input_ids,"target_ids":target_ids,"attn_mask":attn_mask,"length":len(tokens)})
 
         # Sort by length for bucketing
