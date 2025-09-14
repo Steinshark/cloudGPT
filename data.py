@@ -181,39 +181,39 @@ class FinetuneTokenizer(ByteLevelBPETokenizer):
 # in the format '<prompt>...<response>...' 
 class FinetuneDataset(Dataset):
     def __init__(self, json_path, tokenizer:FinetuneTokenizer, max_length=2048,data_cap=1_000_000):
-        with open(json_path, "r", encoding="utf-8") as f:
-            raw_data = json.load(f)
-            old_len     = len(raw_data)
-            #raw_data    = [item for item in raw_data if len(item) == 2]
-            #print(f"reduction to {100*len(raw_data)/old_len}")
 
+        #Load json data. raw_data will be a list of strings.
+        with open(json_path, "r", encoding="utf-8") as readfile:
+            if json_path.endswith('l'):
+                raw_data    = [json.loads(line) for line in readfile.readlines()[:data_cap]]
+            else:
+                raw_data = json.loads(readfile.read())
+
+        #Shuffle to choose random selection
         if data_cap < len(raw_data):
             random.shuffle(raw_data)
-
         raw_data            = raw_data[:data_cap]
 
+
+        #Create vars 
         self.tokenizer      = tokenizer
         self.pad_token_id   = tokenizer.pad_tok
         self.max_length     = max_length
+        self.data           = [] 
 
-        # Pre-tokenize and store lengths
-        self.data           = []
+        #Append data items together up to 2049 in length (we'll cut off 1 token when generating 
+        # the input and target ids)
+        batches             = self.pack_examples(raw_data,self.tokenizer,max_length+1)
 
-        #INCREASE TO SIZE 
-        #self.concat         = f'{END_TOKEN}'.join(raw_data)
-        cur_i               = 0 
-        batches             = self.pack_examples(raw_data,self.tokenizer,2048)
-
-        # while cur_i < len(self.concat):
-        #     chunk           = self.concat[cur_i:cur_i+max_length]
-        #     tokens      = torch.tensor(tokenizer.tokenize(chunk)).long()
-
+        #Convert to tensors and generate the data splits
         for item in batches:
             
             tokens      = torch.tensor(item).long()
             input_ids   = tokens[:-1]
             target_ids  = tokens[1:]
-            attn_mask   = torch.ones_like(input_ids).bool()
+            
+            attn_mask   = torch.zeros(size=(2048,)).bool()
+            attn_mask[:input_ids.size(0)] = 1
             self.data.append({'input_ids':input_ids,"target_ids":target_ids,"attn_mask":attn_mask,"length":len(tokens)})
 
         # Sort by length for bucketing
@@ -284,13 +284,13 @@ def collate_fn(batch, pad_token_id):
 if __name__ == "__main__":
     from transformers import AutoTokenizer
 
-    tokenizer   = load_tokenizer('tokenizer')
+    tokenizer   = load_tokenizer('//Steinpc/s/nlp/tokenizer')
     ftt         = FinetuneTokenizer(tokenizer,128,RESERVE_1)
     #out         = ftt.batch_tokenize(["This one is a Test","this Two is a test. It is longer"])
 
 
-    fname       = 'finetune/unsupervised1.txt'
-    dataset     = FinetuneDataset(fname, ftt)
+    fname       = '//Steinpc/S/nlp/data/factual_dataset_select.jsonl'
+    dataset     = FinetuneDataset(fname, ftt,data_cap=64)
 
     sampler = BucketedBatchSampler(dataset, batch_size=4, bucket_size=200)
 

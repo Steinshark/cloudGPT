@@ -10,6 +10,20 @@ OUTPUT_FILE = r"//Steinpc/s/nlp/data/relevant_topics.jsonl"
 SAVE_INTERVAL = 10
 import re
 
+def filter_line(line:str):
+
+    if "Category:" in line:
+        return False 
+    
+    if 'thumb|' in line:
+        return False 
+    
+    if len(line.split('<|prompt|>')[1]) < 120:
+        return False  
+    
+    return True 
+
+
 def match_keys(title:str):
     return title.lower().replace(" ","").replace("_","")
 
@@ -50,13 +64,13 @@ prompt_templates = [
 
 processed_items = []
 # Compile regexes once
-regexes = []
+regexes         = []
 
 # Sort templates by length descending, so more specific match first
 prompt_templates.sort(key=len, reverse=True)
-removers    = [] 
+removers        = [] 
 training_set    = [] 
-score_min   = 200
+score_min       = 80
 for t in prompt_templates:
     # Split by {subject}, escape everything else
     parts = t.split("{subject}")
@@ -77,13 +91,7 @@ def extract_subject(prompt: str) -> str | None:
     for r in removers:
         prompt = prompt.replace(r,'')
     return prompt
-    """Try to extract the subject from a prompt using the template list."""
-    for regex in regexes:
-        m = regex.search(prompt.strip())
-        if m:
-            input(m.group(1).strip(" ?-.:"))
-            return m[0]
-    return None
+
 
 def main():
 
@@ -106,18 +114,20 @@ def main():
     text_per_item = {}
     current_letter = None  # Track first letter of current article
     skip_to_next_letter = False
+    data        = []
     print("=== Wikipedia Article Filter ===")
     print("Press ↑ for Relevant, ↓ for Not Relevant, 'b' jump to next letter, Esc to quit.\n")
     print(f"Resuming after {processed} already labeled entries.\n")
     scores      = json.loads(open("//Steinpc/s/nlp/data/article_scores.json",'r',encoding='utf-8').read())
 
-    if not TRAIN:
-        mod,tok     = load_model()
+    #if not TRAIN:
+       # mod,tok     = load_model()
 
+    #Prev 688MB
     with open(INPUT_FILE, "r", encoding="utf-8") as f:
         # Skip lines already processed
-        for _ in range(processed):
-            next(f)
+        # for _ in range(processed):
+        #     next(f)
 
         for line in f:
             entry = line.strip()
@@ -131,14 +141,33 @@ def main():
 
             # Show up to <response>
             display_text    = text.split("<|response|>")[0].replace("<|prompt|>", "")
-            article         = extract_subject(display_text)
+            article         = extract_subject(display_text).lower()
             article_text    = text.split('<|response|>')[1]
 
-            if article in text_per_item:
-                text_per_item[article] += len(article_text)
-            else:
-                text_per_item[article] = len(article_text)
+            # if not article or article in processed_items or article in already:
+            #     continue
+            #processed_items.append(article)
 
+            #if not TRAIN:
+                # pred_label, conf    = classify(mod,tok,article)
+                # article     = article + '            '
+                # input(f"{article[:20]} ->\t{pred_label} ({conf})")
+
+            if match_keys(article) in scores:
+                article = match_keys(article)
+
+                if scores[article] > score_min and filter_line(text):
+                    data.append(text)
+                    #input(text)
+                    
+                    # if article in text_per_item:
+                    #     text_per_item[article] += len(article_text)
+                    # else:
+                    #     text_per_item[article] = len(article_text)
+            else:
+                continue
+
+            continue
             # # if random.random() < .0000004:
             # #     break
             # if match_keys(article) in scores:
@@ -148,9 +177,7 @@ def main():
             #         input(f"{article} -> {scores[article]}")
             # continue
 
-            if not article or article in processed_items or article in already:
-                continue
-            processed_items.append(article)
+            
 
             first_letter = article[0].lower()
 
@@ -210,26 +237,11 @@ def main():
                     results = []
                     print(f"✅ Saved {counter + processed} entries so far.")
 
-    
-    sorted_art = {}
-    threshhold  = 1_000
-    while text_per_item:
-
-        cur_best_key = ''
-        cur_best_len = 0
-
-        for item in text_per_item:
-            if text_per_item[item] > cur_best_len:
-                cur_best_len = text_per_item[item]
-                cur_best_key = item 
-        
-        del text_per_item[cur_best_key]
-        if cur_best_len > threshhold:
-            sorted_art[cur_best_key] = cur_best_len
-    #text_per_item = sorted(text_per_item,key=lambda x:text_per_item[x],reverse=True)
-    import pprint 
-    pprint.pp(sorted_art)
-    # Save leftovers
+    #Save data 
+    with open('//Steinpc/s/nlp/data/factual_dataset_80.jsonl','w',encoding='utf-8') as writefile:
+        for item in data:
+            writefile.write(json.dumps(item,ensure_ascii=False) + "\n")
+    exit()
     if TRAIN:
         if results:
             with open(OUTPUT_FILE, "a", encoding="utf-8") as out_f:

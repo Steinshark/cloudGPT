@@ -21,10 +21,7 @@ END_TOKEN                       = "<|endoftext|>"
 
 ALLOWABLE_CHAR                  = string.ascii_lowercase + string.ascii_uppercase + "1234567890!@#$%^&*()~`':;{[}]_-+=<,>.?/}|\\ \n\t" + '"'
 
-
 LOWER                           = False
-
-
 
 
 #TRAINING SETTINGS 

@@ -12,9 +12,9 @@ TOKENIZER_PATH = "//Steinpc/s/nlp/tokenizer"
 DATA_FILE = "//Steinpc/s/nlp/data/relevant_topics.jsonl"
 CLASSIFIER_HEAD_PATH = "classifier_head.pth"
 
-BATCH_SIZE = 16
+BATCH_SIZE = 8
 LR = 2e-4
-EPOCHS = 4
+EPOCHS = 8
 DEVICE = "cuda"
 
 
@@ -40,7 +40,7 @@ def get_class_weights(input_file):
 
 # Example usage in training:
 weights = get_class_weights(DATA_FILE).to(DEVICE)
-criterion = nn.CrossEntropyLoss()#weight=weights)
+criterion = nn.CrossEntropyLoss(weight=weights)
 #criterion = nn.BCEWithLogitsLoss()#pos_weight=weights[0]/weights[1])
 
 
@@ -57,7 +57,8 @@ class Classifier(nn.Module):
     def forward(self, tokens, mask=None):
         # tokens: [B, L]
         output  = self.lm.forward_no_head(tokens, tokens, mask)  # assuming your model outputs [B,L,H]
-        hidden  = output[:, -1, :]  # [B,H]
+        hidden  = output[:, :, :].sum(dim=1)  # [B,T,H]
+
         hidden  = self.inter(hidden)
         hidden  = torch.nn.functional.relu(hidden) 
         # take last token hidden state (or mean)
@@ -120,7 +121,7 @@ class WikiDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        text = self.data[idx]["text"]
+        text = self.data[idx]["text"].lower()
         label = self.data[idx]["label"]
         tokens = torch.tensor(tokenizer.encode(text).ids).long()
         return tokens, torch.tensor(label).long()

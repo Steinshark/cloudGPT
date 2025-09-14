@@ -144,46 +144,53 @@ def generate_finetune_prompts():
 
 if __name__ == '__main__':
 
-    LR          = 5e-5
-    WD          = 1e-4
-    EP          = 3
-    BS          = 1
-    ACCU        = 256
-    SAVE        = 32
-    STEP_EVERY  = ACCU / BS
+    LR                  = 5e-5
+    WD                  = 1e-4
+    EP                  = 3
+    BS                  = 1
+    ACCU                = (1024*1024) // 2048
+    SAVE                = 32
+    STEP_EVERY          = ACCU / BS
 
     #Load tokenizer
-    fpath_tok   = "C:/gitrepos/cloudGPT/tokenizer"
-    tokenizer   = load_tokenizer(fpath_tok)
-    ftt         = FinetuneTokenizer(tokenizer,2048,RESERVE_1)
-    VS          = ftt.base_tokenizer.get_vocab_size()
-    fname       = 'C:/gitrepos/cloudGPT/finetune/finetune1.json'
-    dataset     = FinetuneDataset(fname, ftt)
+    fpath_tok           = "//Steinpc/s/nlp/tokenizer"
+    tokenizer           = load_tokenizer(fpath_tok)
+    ftt                 = FinetuneTokenizer(tokenizer,2048,RESERVE_1)
+    VS                  = ftt.base_tokenizer.get_vocab_size()
 
-    #sampler     = BucketedBatchSampler(dataset, batch_size=BS, bucket_size=200)
+    #Load data
+    fname               = '//Steinpc/s/nlp/data/factual_dataset_select.jsonl'
+    dataset             = FinetuneDataset(fname, ftt)
+    loader              = DataLoader(dataset,batch_size=BS,shuffle=True)
 
-    #loader      = DataLoader(dataset,batch_sampler=sampler,collate_fn=lambda x: collate_fn(x, dataset.pad_token_id))
-    loader      = DataLoader(dataset,batch_size=1,shuffle=True)
+    #Load model
+    model_loadpoint     = "//Steinpc/s/nlp/models/PreTrainLMSteinshark"
+    lm_model            = LMSteinshark.from_loadpoint(model_loadpoint,p_override=.1).bfloat16().cuda()
+    lm_model.name       = "FactTune"
 
-    lm_model    = LMSteinshark.from_loadpoint("D:/nlp/models/PretrainLMSteinshark",p_override=.1).bfloat16().cuda()
-    lm_model.name = "PreFinetune"
-    optim       = torch.optim.AdamW(lm_model.parameters(),lr=LR,weight_decay=WD)
-    save_count  = 0
-    accumulation_loss = 0
+    #Build optimizer
+    optim               = torch.optim.AdamW(lm_model.parameters(),lr=LR,weight_decay=WD)
+    save_count          = 0
+    accumulation_loss   = 0
 
     for ep in range(EP):
         c_loss  = 0 
 
         for i,batch in enumerate(loader):
+
+            #Snatch the data
             input_ids           = batch[0].cuda()
             target_ids          = batch[1].cuda()
             attn_mask           = batch[2].cuda()
 
+            #Send it forward
             logits,target_ids   = lm_model.forward(input_ids,target_ids,attn_mask)
 
+            #Shape it up
             logits              = logits.view(target_ids.size(0)*target_ids.size(1),VS)
             targets             = target_ids.view(target_ids.size(0)*target_ids.size(1))
-
+            
+            #Calculate loss -> grads will be divided by STEP_EVERY once right before stepping
             loss                = torch.nn.functional.cross_entropy(logits,targets,ignore_index=ftt.pad_tok)
             accumulation_loss   += loss.item()
             loss.backward()
@@ -193,7 +200,7 @@ if __name__ == '__main__':
                     if p.grad is not None:
                         p.grad.div_(STEP_EVERY)
 
-
+                #Clip norms and step + reset
                 torch.nn.utils.clip_grad_norm_(lm_model.parameters(),MAX_NORM)
                 optim.step()
                 optim.zero_grad()
