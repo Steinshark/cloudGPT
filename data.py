@@ -243,6 +243,9 @@ class FinetuneDataset(Dataset):
 
 
         if buffer:  # flush remainder
+            #buff it out to padded length
+            while len(buffer) < max_len:
+                buffer.append(tokenizer.pad_token_id)
             batches.append(buffer)
         return batches
     
