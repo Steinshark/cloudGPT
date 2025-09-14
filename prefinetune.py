@@ -147,9 +147,9 @@ if __name__ == '__main__':
     LR                  = 5e-5
     WD                  = 1e-4
     EP                  = 3
-    BS                  = 32
+    BS                  = 16
     ACCU                = (64*1024) // 2048
-    SAVE                = 1
+    SAVE                = 8
     STEP_EVERY          = ACCU // BS
     CONTEXT             = 1024
 
@@ -183,7 +183,8 @@ if __name__ == '__main__':
             input_ids           = batch[0].cuda()
             target_ids          = batch[1].cuda()
             attn_mask           = batch[2].cuda()
-
+            input(f"train on {tokenizer.decode(input_ids[0][:16].cpu().numpy())}")
+            input(f"train on {tokenizer.decode(target_ids[0][:16].cpu().numpy())}")
             #Send it forward
             #input(f"Shapes:\n{input_ids.shape}\n{target_ids.shape}\n{attn_mask.shape}")
             logits,target_ids   = lm_model.forward(input_ids,target_ids,attn_mask)
