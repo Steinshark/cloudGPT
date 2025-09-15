@@ -160,14 +160,14 @@ if __name__ == '__main__':
     VS                  = ftt.base_tokenizer.get_vocab_size()
 
     #Load data
-    fname               = f'{ENV_PREFIX}/data/factual_dataset_select.jsonl'
+    fname               = f'{ENV_PREFIX}/data/finetune.json'
     dataset             = FinetuneDataset(fname, ftt)
     loader              = DataLoader(dataset,batch_size=BS,shuffle=True)
 
     #Load model
-    model_loadpoint     = f"{ENV_PREFIX}/models/PreTrainLMSteinshark"
+    model_loadpoint     = f"{ENV_PREFIX}/models/FactTune"
     lm_model            = LMSteinshark.from_loadpoint(model_loadpoint,p_override=.1).bfloat16().cuda()
-    lm_model.name       = "FactTune"
+    lm_model.name       = "InstructTune"
 
     #Build optimizer
     optim               = torch.optim.AdamW(lm_model.parameters(),lr=LR,weight_decay=WD)
