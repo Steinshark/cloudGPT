@@ -10,6 +10,7 @@ from matplotlib import pyplot as plt
 from utils import reduce_arr
 from environment import *
 import numpy 
+from torch.utils.data import DataLoader
 
 def build_validation_set(tokens:numpy.array,context_size:int):
     
@@ -26,7 +27,6 @@ def build_validation_set(tokens:numpy.array,context_size:int):
 
     inputs          = torch.tensor(numpy.asarray(inputs)).long()
     targets         = torch.tensor(numpy.asarray(targets)).long()
-
     return inputs,targets 
 
 #               cur_train_iter, train_iters,model,tokenizer,optimizer,args
@@ -34,6 +34,21 @@ def print_update(cur_train_iter,train_iters,model:LMSteinshark,tokenizer:ByteLev
 
     global LAST_UPDATE_T
     global LAST_SAMPLE_T
+
+    #Check for printint stats 
+    if time.time() - LAST_UPDATE_T > UPDATE_EVERY_T and False:
+
+        iters                   = "iter " + f"{cur_train_iter}/{train_iters}".rjust(11) + "   "
+        losses                  = f"{float(sum(model.stats['losses'][-64:])) / float(len(model.stats['losses'][-64:])+.01):.5f}".rjust(8) + "   "
+        tok_thru                = f"{(model.stats['tok_snap']/(time.time()-model.stats['time_snap']))/1_000:.1f}k tok/s" + "   "
+        toks                    = f"{model.stats['tok_through']/1_000_000:.1f}M tokens"
+        lr                      = f"  lr={optimizer.param_groups[0]['lr']}"
+        LAST_UPDATE_T          = time.time()
+
+        model.stats['tok_snap']         = 0 
+        model.stats['time_snap']        = time.time()
+
+        print(iters+losses+tok_thru+toks+lr)
 
 
     #Check to sample 
@@ -70,18 +85,18 @@ if __name__ == "__main__":
     argparser.add_argument('--model_type',default='base')
     argparser.add_argument('--bs',default='4')
     argparser.add_argument("--n_layers",default='16')
-    argparser.add_argument('--bs_tok',default='256*1024')
+    argparser.add_argument('--bs_tok',default='64*1024')
     #argparser.add_argument('--ds_name',default='/home/ubuntu/Stein2/data')
     argparser.add_argument('--ds_name',default='//Steinpc/s/nlp/toyset')
     argparser.add_argument('--tokenizer_name',default='tokenizer')
-    argparser.add_argument('--input_size',default='512')
+    argparser.add_argument('--input_size',default='1024')
     argparser.add_argument('--model_name',default='preTrain0')
-    argparser.add_argument('--n_embed',default='1024')
-    argparser.add_argument('--head_dim',default='64')
+    argparser.add_argument('--n_embed',default='1024+512')
+    argparser.add_argument('--head_dim',default='128')
     argparser.add_argument('--n_ff',default='4')
     argparser.add_argument('--load',default='False')
     argparser.add_argument('--max_tok',default='50_000_000_000')
-    argparser.add_argument("--total_tok",default='4_000_000_000')
+    argparser.add_argument("--total_tok",default='1000*300')
     args                        = argparser.parse_args()
 
 
@@ -90,10 +105,6 @@ if __name__ == "__main__":
     dataset                     = TokenizedDataset(args.ds_name,eval(args.input_size),max_tokens=max_tokens,shuffle=True)
     #Split to a validation set 
     validation_set              = dataset.validation_set
-    test_inputs,test_targets    = build_validation_set(validation_set,eval(args.input_size))
-    test_inputs                 = test_inputs.cuda()
-    test_targets                = test_targets.cuda()
-    mask                        = torch.ones_like(test_inputs,device=torch.device('cuda')).bool()
 
     tokenizer_name              = args.tokenizer_name                           #Tokenizer used
     train_root                  = PATH                                          #Where all the training data will be found  
@@ -112,6 +123,7 @@ if __name__ == "__main__":
     n_heads                     = n_embed//eval(args.head_dim)                  #Number of attn heads          
     n_ff                        = int(n_embed*eval(args.n_ff))                  #Size of the feed forward network 
     act_fn                      = torch.nn.GELU                                 #Used throughout model
+    n_epochs                    = range(3)
 
     #Training settings
     train_batch_tok             = eval(args.bs_tok)                             #Number of tokens before stepping optimizer 
@@ -132,8 +144,11 @@ if __name__ == "__main__":
     #Create Tokenizer
     assert tokenizer.get_vocab_size() == vocab_size
 
+    
+    dataloader                  = DataLoader(dataset,batch_size=virtual_bs,shuffle=True)
+
     #Create model 
-    model:LMSteinshark          = LMSteinshark(input_size,n_embed,n_layers,n_heads,n_ff,vocab_size,act_fn,dropout,dtype=torch.bfloat16)
+    model:LMSteinshark          = LMSteinshark(input_size,n_embed,n_layers,n_heads,n_ff,vocab_size,act_fn,dropout)
     
     model.name                  = args.model_name
     model                       = model.bfloat16()
@@ -154,7 +169,6 @@ if __name__ == "__main__":
     warmup_sched                = torch.optim.lr_scheduler.LinearLR(optimizer,start_factor=.1,end_factor=1,total_iters=warmup_steps)
     decay_sched                 = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,T_max=decay_steps,eta_min=lr/100)
     scheduler                   = torch.optim.lr_scheduler.ChainedScheduler([warmup_sched,decay_sched])
-    static_mask                 = torch.ones(size=(bs,input_size),dtype=torch.bool,device=model.device)
 
     #Train model 
     cur_train_iter              = MODEL.stats['iter_through']
@@ -162,10 +176,7 @@ if __name__ == "__main__":
     trainset_iter               = 0
     trainset_tok                = 0
 
-    model_size                  = f"{model.n_params//1_000_000}M params"
-    data_size                   = f"{dataset.n_tokens//1_000_000}M Tokens"
-    training_size               = f"{(total_tok/1_000_000_000):.2f}B Tokens"
-    print(f"Beginning training\n\tModel Size:\t{model_size}\n\tData Size:\t{data_size}\n\tTrain Size:\t{training_size}\n\tBatch Size:\t{bs}")
+    print(f"Beginning training\n\tModel Size:\t{model.n_params//1_000_000}M params\n\tData Size:\t{dataset.n_tokens//1_000_000}M Tokens\n\tBatch Size:\t{bs}")
     
     #Create stat "time_start" to track local training run 
     model.stats['run_time_start']   = time.time()
@@ -176,57 +187,66 @@ if __name__ == "__main__":
     model.stats['time_snap']        = time.time()
 
     #Run training loop
-    while cur_train_iter < train_iters:
+    for ep in n_epochs:
+        print(f"start ep {ep}")
+        for i,batch in enumerate(dataloader):
 
-        #Sample data 
-        num_tok                             = input_size
-        batch                               = dataset.sample(bs,input_size,model.device)
+            input_ids:torch.Tensor          = batch[1].cuda().long()
+            target_ids:torch.Tensor         = batch[0].cuda().long()
+            
+            batch_sliced_input_ids          = input_ids.view(accu_steps,bs,input_size)
+            batch_sliced_target_ids         = target_ids.view(accu_steps,bs,input_size)
 
-        #Make inputs, targets
-        input_ids                           = batch['input_ids'].long()
-        target_ids                          = batch['target_ids'].long() 
-        
-        #Put through model 
-        logits,target_ids                   = model.forward(input_ids,target_ids,static_mask)
-        logits                              = logits.view(bs*input_size,vocab_size)
-        targets                             = target_ids.view(bs*input_size)
+            accumulated_loss                = 0 
+            for slice in range(accu_steps):
+                #Put through model 
+                logits,target_ids           = model.forward(batch_sliced_input_ids[slice],
+                                                            batch_sliced_target_ids[slice],
+                                                            torch.ones_like(batch_sliced_input_ids[slice],device=model.device,dtype=torch.bool))
+                
+                logits                      = logits.view(bs*input_size,vocab_size)
+                targets                     = target_ids.view(bs*input_size)
 
-        #Compute loss and backprop
-        loss:torch.Tensor                   = torch.nn.functional.cross_entropy(logits, targets) / accu_steps
-        loss.backward()
+                loss                        = torch.nn.functional.cross_entropy(logits, targets)
+                loss.backward()
+                accumulated_loss            += loss.item()
 
-        #Update for rate tracking 
-        model.stats['tok_snap']             += input_ids.numel()
+            accumulated_loss                /= accu_steps
 
-        #Update stats
-        model.stats['iter_through']         += 1
-        model.stats['run_iter_through']     += 1
 
-        model.stats['tok_through']          += input_ids.numel()
-        model.stats['run_tok_through']      += input_ids.numel()
+            #Update for rate tracking 
+            model.stats['tok_snap']             += batch_sliced_input_ids.numel()
 
-        #Zero if on step cycle 
-        if (cur_train_iter % accu_steps) == 0 and not cur_train_iter == 0:
+            #Update stats
+            model.stats['iter_through']         += 1
+            model.stats['run_iter_through']     += 1
+
+            model.stats['tok_through']          += batch_sliced_input_ids.numel()
+            model.stats['run_tok_through']      += batch_sliced_input_ids.numel()
+
 
             #Clip norm and step
             torch.nn.utils.clip_grad_norm_(model.parameters(),MAX_NORM)
             optimizer.step()
             optimizer.zero_grad()
-                        
+                
             #Step lr_scheduler (with error at very end)
             scheduler.step()
+
 
             #Save to stats root
             saving_weights  = (cur_train_iter - LAST_SAVE) > SAVE_FREQ
             model.save(root=f"{MODELS}",save_weights=saving_weights)
             if saving_weights:
                 print(f"\tsaved weights")
-                LAST_SAVE = cur_train_iter           
+                LAST_SAVE = cur_train_iter          
 
             #Get validation loss
             with torch.inference_mode():
                 model.set_generate_mode()
-                logits,targets              = model(test_inputs,test_targets,mask)
+                
+                test_inputs,test_targets    = build_validation_set(validation_set,input_size)
+                logits,targets              = model(test_inputs.cuda(),test_targets.cuda(),torch.ones_like(test_inputs,device=model.device,dtype=torch.bool))
                 logits                      = logits.view(test_inputs.size(0)*input_size,vocab_size)
                 targets                     = targets.view(test_targets.size(0)*input_size)
                 test_loss                   = torch.nn.functional.cross_entropy(logits, targets)
@@ -234,21 +254,16 @@ if __name__ == "__main__":
             model.stats['losses'].append(float(test_loss))
             iter_str    = f"             [{cur_train_iter}/{train_iters}]"[-17:]
             loss_str    = f'    loss={test_loss:.7f}0000'[:16]
-
-            token_throughput = model.stats['tok_snap']/(time.time()-model.stats['time_snap'])
-
-            tok_thru    = f"       tok/sec={(token_throughput/1_000):.1f}K"[-16:]
+            tok_thru    = f"       tok/sec={(model.stats['tok_snap']/(time.time()-model.stats['time_snap']))/1_000:.1f}K"[-16:]
             toks        = f"          {model.stats['tok_through']/1_000_000:.1f}M tokens"[-16:]
             lr          = f"        lr={optimizer.param_groups[0]['lr']:.8f}"[-16:]
+            print(f"[PARAM UPDATE]{iter_str}{loss_str}{tok_thru}{toks}{lr}")
 
-            wall_t_left = f"        t_remain={((total_tok-model.stats['tok_through']) / (token_throughput*3600)):.1f}h"
-            print(f"[PARAM UPDATE]{iter_str}{loss_str}{tok_thru}{toks}{lr}{wall_t_left}")
-
-        
-        print_update(cur_train_iter,train_iters,model,tokenizer,optimizer,args)
+            
+            print_update(cur_train_iter,train_iters,model,tokenizer,optimizer,args)
 
 
-        cur_train_iter += 1 
+            cur_train_iter += 1 
 
     #We're done!
     model.save(root=f"{MODELS}",save_weights=True)

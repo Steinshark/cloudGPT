@@ -17,7 +17,7 @@ class ModelTesterApp(tk.Tk):
         self._create_widgets()
 
         model_p     = r"//Steinpc/s/data/nlp/models/finetune0/model_weights.pth"
-        model_p     = r"//Steinpc/s/nlp/models/PreFinetune320/model_weights.pth"
+        model_p     = r"//Steinpc/s/nlp/models/FactTune/model_weights.pth"
         self.load_model(filepath=model_p)
         self.load_tokenizer(tokenizer_dir=r"//Steinpc/s/nlp/tokenizer")
 

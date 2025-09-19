@@ -4,6 +4,8 @@ import re
 import json 
 import os 
 import random
+import sys 
+sys.path.append("C:/gitrepos/cloudGPT")
 from utils import END_TOKEN,           CODE_TOKEN,          RUNCODE_TOKEN,       WEB_TOKEN,           PROMPT_TOKEN,        RESPONSE_TOKEN,      RESERVE_1,           RESERVE_2
 
 
@@ -50,6 +52,40 @@ input_variants = [
         'Base the code off of this input'
         "### Input:"  # occasional structured header
         ]
+
+def expand_prompts(prompt_completion_pair:list[tuple[str,str]]):
+    completions     = []
+
+    if isinstance(prompt_completion_pair[0],str):
+        return [(prompt_completion_pair[0],prompt_completion_pair[1])]
+    
+    for prompt in prompt_completion_pair[0]:
+        for completion in prompt_completion_pair[1]:
+            completions.append((prompt,completion))
+    
+    return completions
+
+def read_data():
+    content     = open("C:/gitrepos/cloudGPT/finetune/training1.txt",'r',encoding='utf-8').read()
+    dataset     = eval(content)
+    import pprint 
+    data = []
+    for item in dataset:
+        prompts = expand_prompts(item)
+        data += prompts 
+    #codeex      = [ex for ex in data if RUNCODE_TOKEN in ex[1]]
+    import pprint 
+    for d in data:
+
+        input(d)
+
+    prompts     = [f"{PROMPT_TOKEN}{it[0]}{RESPONSE_TOKEN}{it[1]}" for it in data]    
+    
+    with open(f"C:/gitrepos/cloudgpt/finetune/runcode.jsonl",'w',encoding='utf-8') as writefile:
+        for item in prompts:
+            writefile.write(f"{json.dumps(item)}\n")
+    
+    print(f"built {len(prompts)} examples")
 
 def strip_html(text):
     # Unescape HTML entities
@@ -189,14 +225,21 @@ def build_code_alpaca():
 def compile_dataset():
 
     full_dataset    = []
-    for source in ["baize.json","eli5.json","nq.json",'reddit.json']:
+    sources         = ["baize.json","eli5.json","nq.json",'reddit.json']
+    sources         = ["ELI5_fixed.json","nq.json",'code_alpaca.json',"runcode.jsonl"]
+    for source in sources:
         with open(os.path.join("finetune",source),'r',encoding='utf_8') as rf:
-            samples     = json.loads(rf.read())
+            if 'jsonl' in source:
+                samples     = []
+                for line in rf:
+                    samples.append(json.loads(line))
+            else:
+                samples     = json.loads(rf.read())
         
         for data in samples:
             full_dataset.append(data)
 
-    with open(f"finetune/finetune1.json",'w',encoding='utf_8') as wf:
+    with open(f"finetune/finetune.json",'w',encoding='utf_8') as wf:
         wf.write(json.dumps(full_dataset))
 
     print(f"generated {len(full_dataset)} training examples")
@@ -215,14 +258,35 @@ def load_nq():
             input('')
 
 
+def fix_eli():
+    pattern     = re.compile(r'(\[([A-Za-z0-9]+)\]\(_URL_(\d+)_\))')
+    data = json.loads(open("C:/gitrepos/cloudGPT/finetune/eli5.json",'r',encoding="utf-8").read())
+
+    newdata      = []
+    for d in data:
+        res     = pattern.findall(d)
+        if res:
+            original = res[0][0]
+            new     = res[0][1]
+            newdata.append(d.replace(original,new))
+        else:
+            newdata.append(d)
+    
+    with open("finetune/ELI5_fixed.json",'w',encoding='utf-8') as writefile:
+        writefile.write(json.dumps(newdata))
+    
+
 if __name__ == "__main__":  
-    build_code_alpaca()
-    exit()
-    build_nq()
-    build_baize()
-    build_reddit()
-    build_eli5()
+    #fix_eli()
+    #build_code_alpaca()
+    #read_data()
+    #build_nq()
+    #build_baize()
+    #build_reddit()
+    #build_eli5()
+    #read_data()
     compile_dataset()
+
     #data = build_nq("train")
     #build_dolly()
     #build_baize()

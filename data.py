@@ -25,7 +25,7 @@ def load_tokenizer(f_root:str)->ByteLevelBPETokenizer:
 #Allows sampling of tokens
 class TokenizedDataset(Dataset):
 
-    def __init__(self, tokens, input_size,max_tokens=None,shuffle=False,augmenting=True):
+    def __init__(self, tokens, input_size,max_tokens=None,shuffle=False,augmenting=True,valid_size=32768):
         
         self.loaded_files   = set()
         self.shuffle        = shuffle
@@ -62,26 +62,52 @@ class TokenizedDataset(Dataset):
                 if self.max_tokens and (self.n_tokens > self.max_tokens):
                     break 
 
-            tokens  = numpy.concatenate(token_set).flatten()  
+            tokens  = numpy.concatenate(token_set).flatten()
             tokens  = torch.from_numpy(tokens)
 
         
+        self.tokens         = tokens.contiguous().to(torch.int16)[:self.max_tokens+valid_size]  # Make sure it's contiguous for fast slicing
+        
+        #Build a test set 
+        self.validation_set = self.tokens[:valid_size] 
+        self.tokens         = self.tokens[valid_size:].cuda()
+        self.tokens.to(torch.int16)
 
-        self.tokens         = tokens.contiguous().to(torch.int16)  # Make sure it's contiguous for fast slicing
         self.input_size     = input_size
         self.n_tokens       = len(self.tokens)
 
+        self.input_idx      = torch.arange(input_size,device=torch.device('cuda'))
+        self.target_idx     = torch.arange(input_size,device=torch.device('cuda')) + 1 
 
-    #Create indices for sampling
-    def build_idxs(self,bs,n_tokens):
-        end_point = len(self.tokens) - (n_tokens + 1)
-        return  torch.randint(0, end_point, (bs,))
+        n_batches           = self.n_tokens // (input_size+1)
+        self.base_idxs      = torch.arange(0,n_batches,device='cuda',dtype=torch.int32)
+        self.shuffle_indices()
+
+            
+    #Reshuffle indices - call for a new epoch
+    def shuffle_indices(self):
+        perm                = torch.randperm(self.base_idxs.shape[0],device='cuda')
+        self.shuffled_idxs  = self.base_idxs[perm]
+        self.cur_i          = 0 
+
+    #Grab the next set of shuffled indices
+    def build_idxs(self,bs):
+        
+        if self.cur_i + bs > self.shuffled_idxs.size(0):
+            self.shuffle_indices()
+
+        #Grab batch 
+        idxs            = self.shuffled_idxs[self.cur_i:self.cur_i+bs]
+        self.cur_i      += bs 
+
+
+        return idxs
 
     #Crunch the indices for slicing the final tokens list
     def stack_indices(self,n_tokens,idxs):
-        offsets         = idxs.unsqueeze(1) + torch.arange(n_tokens).unsqueeze(0)
-        batch_input     = self.tokens[offsets]
-        batch_target    = self.tokens[offsets + 1]
+
+        batch_input     = self.tokens[idxs[:,None] + self.input_idx]
+        batch_target    = self.tokens[idxs[:,None] + self.target_idx]
 
         return batch_input,batch_target
     
@@ -89,20 +115,17 @@ class TokenizedDataset(Dataset):
     # place them on device, 
     def sample(self, bs: int, n_tokens: int, device=None) -> dict[str, torch.Tensor]:
 
-        idxs                                = self.build_idxs(bs,n_tokens)
+        idxs                                = self.build_idxs(bs)
 
         
         batch_input,batch_target           = self.stack_indices(n_tokens,idxs)
         
 
         return {
-            "input_ids": batch_input.to(device).long(),
-            "target_ids": batch_target.to(device).long(),
+            "input_ids": batch_input,
+            "target_ids": batch_target,
         }
 
-
-    def __len__(self):
-        return self.n_tokens // self.input_size
 
     #This function loads additional numpy files not available before (due to slowly streaming data over scp connection)
     def augment_data(self):
@@ -180,7 +203,7 @@ class FinetuneTokenizer(ByteLevelBPETokenizer):
 #Finetune dataset accepts any 'json_path' that points to a jsonable_file yielding an iterable of strings
 # in the format '<prompt>...<response>...' 
 class FinetuneDataset(Dataset):
-    def __init__(self, json_path, tokenizer:FinetuneTokenizer, max_length=2048,data_cap=1_000_000):
+    def __init__(self, json_path, tokenizer:FinetuneTokenizer, max_length=2048,data_cap=1_000_000,concat=True):
 
         #Load json data. raw_data will be a list of strings.
         with open(json_path, "r", encoding="utf-8") as readfile:
@@ -203,7 +226,10 @@ class FinetuneDataset(Dataset):
 
         #Append data items together up to 2049 in length (we'll cut off 1 token when generating 
         # the input and target ids)
-        batches             = self.pack_examples(raw_data,self.tokenizer,max_length+1)
+        if concat:
+            batches             = self.pack_examples(raw_data,self.tokenizer,max_length+1)
+        else:
+            batches             = [tokenizer.tokenize(datapoint) + [tokenizer.eos_token_id] for datapoint in raw_data]
 
         #Convert to tensors and generate the data splits
         for item in batches:
@@ -212,7 +238,7 @@ class FinetuneDataset(Dataset):
             input_ids   = tokens[:-1]
             target_ids  = tokens[1:]
             
-            attn_mask   = torch.ones(size=(max_length,)).bool()
+            attn_mask   = torch.ones_like(input_ids).bool()
             attn_mask[input_ids == self.tokenizer.pad_token_id] = False
             self.data.append({'input_ids':input_ids,"target_ids":target_ids,"attn_mask":attn_mask,"length":len(tokens)})
 

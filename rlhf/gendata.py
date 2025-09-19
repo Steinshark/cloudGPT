@@ -4,8 +4,8 @@ sys.path.append("C:/gitrepos/cloudGPT")
 from model import LMSteinshark
 from data import load_tokenizer
 
-PROMPTS         = "D:/Project Chat/prompts.txt"
-DATASET         = "D:/Project Chat/prompt_responses.json"
+PROMPTS         = "D:/Project Chat/data/prompts.txt"
+DATASET         = "D:/Project Chat/data/prompt_responses.json"
 CUR_MODEL       = "C:/data/nlp/models/finetune0"
 MODEL           = LMSteinshark.from_loadpoint(CUR_MODEL,p_override=0).bfloat16().cuda().eval()
 CUR_TOK         = "C:/gitrepos/cloudgpt/tokenizer"

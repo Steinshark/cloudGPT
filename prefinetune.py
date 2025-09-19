@@ -144,12 +144,12 @@ def generate_finetune_prompts():
 
 if __name__ == '__main__':
 
-    LR                  = 1e-4
-    WD                  = 5e-3
-    EP                  = 3
-    BS                  = 16
+    LR                  = 5e-5
+    WD                  = 1e-3
+    EP                  = 1
+    BS                  = 1
     ACCU                = (1024*1024) // 1024
-    SAVE                = 16
+    SAVE                = 32
     STEP_EVERY          = ACCU // BS
     CONTEXT             = 1024
 
@@ -160,17 +160,22 @@ if __name__ == '__main__':
     VS                  = ftt.base_tokenizer.get_vocab_size()
 
     #Load data
-    fname               = f'{ENV_PREFIX}/data/finetune.json'
-    dataset             = FinetuneDataset(fname, ftt)
+    #fname               = f'{ENV_PREFIX}/data/finetune.json'
+    fname               = "C:/gitrepos/cloudgpt/finetune/runcode.jsonl"
+    fname               = "C:/gitrepos/cloudgpt/finetune/finetune.json"
+    dataset             = FinetuneDataset(fname, ftt,max_length=CONTEXT,concat=False)
     loader              = DataLoader(dataset,batch_size=BS,shuffle=True)
 
     #Load model
-    model_loadpoint     = f"{ENV_PREFIX}/models/FactTune"
-    lm_model            = LMSteinshark.from_loadpoint(model_loadpoint,p_override=.1).bfloat16().cuda()
-    lm_model.name       = "InstructTune"
+    model_loadpoint     = f"{ENV_PREFIX}/models/InstructTune192"
+    lm_model            = LMSteinshark.from_loadpoint(model_loadpoint,p_override=.05).bfloat16().cuda()
+    lm_model.name       = "FineTune"
 
     #Build optimizer
     optim               = torch.optim.AdamW(lm_model.parameters(),lr=LR,weight_decay=WD)
+    total_steps = (len(loader) + ACCU - 1) // ACCU
+    lr_scheduler        = torch.optim.lr_scheduler.LinearLR(optim,start_factor=1,end_factor=.2,total_iters=total_steps)
+    print(f"lr scheduler {total_steps} steps")
     save_count          = 0
     accumulation_loss   = 0
     
@@ -202,7 +207,7 @@ if __name__ == '__main__':
             accumulation_loss   += loss.item()
             loss.backward()
 
-            if ((i + 1) % (STEP_EVERY)) == 0:
+            if ((i + 1) % (STEP_EVERY)) == 0 or i == len(loader)-1:
                 for p in lm_model.parameters():
                     if p.grad is not None:
                         p.grad.div_(STEP_EVERY)
@@ -217,12 +222,19 @@ if __name__ == '__main__':
 
                 if (save_count % SAVE) == 0:
                     lm_model.stats['losses'].append(accumulation_loss)
-                    lm_model.name = f"PreFinetune{save_count}"
+                    prename     = lm_model.name
+                    #lm_model.name = f"{prename}{save_count}"
                     lm_model.save(save_weights=True,root=f'{ENV_PREFIX}/models')
                     print(f"\tsaving {lm_model.name}")
+                    lm_model.name = prename
                 
                 save_count += 1 
                 torch.cuda.empty_cache()
+                try:
+                    lr_scheduler.step()
+                except ValueError:
+                    print(f"Failed to step")
+                    pass
 
             tot_tok_thru    = attn_mask.int().sum().item()
 
@@ -236,3 +248,4 @@ if __name__ == '__main__':
             
         print(f"\n\nEP {ep} complete\n\n")
         lm_model.save(save_weights=True,root=f'{ENV_PREFIX}/models')
+        print(f"\tsaving {lm_model.name}")
