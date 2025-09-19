@@ -66,7 +66,8 @@ class TokenizedDataset(Dataset):
             tokens  = torch.from_numpy(tokens)
 
         
-        self.tokens         = tokens.contiguous().to(torch.int16)[:self.max_tokens+valid_size]  # Make sure it's contiguous for fast slicing
+        self.tokens         = tokens.contiguous().to(torch.long)[:self.max_tokens+valid_size]  # Make sure it's contiguous for fast slicing
+        self.tokens         = self.tokens.cuda()
         
         #Build a test set 
         self.validation_set = self.tokens[:valid_size] 

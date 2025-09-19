@@ -11,8 +11,9 @@ from utils import reduce_arr
 from environment import *
 import numpy 
 
-def build_validation_set(tokens:numpy.array,context_size:int):
+def build_validation_set(tokens:torch.Tensor,context_size:int):
     
+    tokens          = tokens.cpu().numpy()
     inputs          = []
     targets         = [] 
     while len(tokens) > (context_size+1):
@@ -68,14 +69,14 @@ if __name__ == "__main__":
     argparser                   = argparse.ArgumentParser()
     argparser.add_argument('--model_dir',default='')
     argparser.add_argument('--model_type',default='base')
-    argparser.add_argument('--bs',default='4')
+    argparser.add_argument('--bs',default='16')
     argparser.add_argument("--n_layers",default='16')
     argparser.add_argument('--bs_tok',default='256*1024')
-    #argparser.add_argument('--ds_name',default='/home/ubuntu/Stein2/data')
-    argparser.add_argument('--ds_name',default='//Steinpc/s/nlp/toyset')
+    argparser.add_argument('--ds_name',default='/home/ubuntu/finetune/nlp/data/toyset')
+    #argparser.add_argument('--ds_name',default='//Steinpc/s/nlp/toyset')
     argparser.add_argument('--tokenizer_name',default='tokenizer')
     argparser.add_argument('--input_size',default='512')
-    argparser.add_argument('--model_name',default='preTrain0')
+    argparser.add_argument('--model_name',default='preTrain_Small')
     argparser.add_argument('--n_embed',default='1024')
     argparser.add_argument('--head_dim',default='64')
     argparser.add_argument('--n_ff',default='4')
@@ -183,8 +184,8 @@ if __name__ == "__main__":
         batch                               = dataset.sample(bs,input_size,model.device)
 
         #Make inputs, targets
-        input_ids                           = batch['input_ids'].long()
-        target_ids                          = batch['target_ids'].long() 
+        input_ids                           = batch['input_ids']
+        target_ids                          = batch['target_ids'] 
         
         #Put through model 
         logits,target_ids                   = model.forward(input_ids,target_ids,static_mask)
