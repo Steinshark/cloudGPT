@@ -25,13 +25,13 @@ def load_tokenizer(f_root:str)->ByteLevelBPETokenizer:
 #Allows sampling of tokens
 class TokenizedDataset(Dataset):
 
-    def __init__(self, tokens, input_size,max_tokens=None,shuffle=False,augmenting=True,valid_size=32768,device_override='cpu'):
+    def __init__(self, tokens, input_size,max_tokens=None,shuffle=False,augmenting=True,valid_size=32768,device_override='cuda'):
         
         self.loaded_files   = set()
         self.shuffle        = shuffle
         self.max_tokens     = max_tokens
         self.augmenting     = augmenting
-        self.device         = device_override
+        self.device         = torch.device("cuda")
 
         #Treat it as tokens list 
         if isinstance(tokens, numpy.ndarray):
@@ -67,13 +67,12 @@ class TokenizedDataset(Dataset):
             tokens  = torch.from_numpy(tokens)
 
         
-        self.tokens         = tokens.contiguous().to(torch.long)[:self.max_tokens+valid_size]  # Make sure it's contiguous for fast slicing
-        self.tokens         = self.tokens
+        self.tokens         = tokens.contiguous().to(torch.long)[:self.max_tokens+valid_size].to(self.device)
         
         #Build a test set 
         self.validation_set = self.tokens[:valid_size] 
         self.tokens         = self.tokens[valid_size:]
-        self.tokens.to(torch.int16)
+        self.tokens.to(torch.int16).to(self.device)
 
         self.input_size     = input_size
         self.n_tokens       = len(self.tokens)
@@ -93,7 +92,7 @@ class TokenizedDataset(Dataset):
     #Reshuffle indices - call for a new epoch
     def shuffle_indices(self):
         perm                = torch.randperm(self.base_idxs.shape[0],device=self.device)
-        self.shuffled_idxs  = self.base_idxs[perm]
+        self.shuffled_idxs  = self.base_idxs[perm].to(self.device)
         self.cur_i          = 0 
 
     #Grab the next set of shuffled indices
@@ -111,7 +110,6 @@ class TokenizedDataset(Dataset):
 
     #Crunch the indices for slicing the final tokens list
     def stack_indices(self,n_tokens,idxs):
-
         batch_input     = self.tokens[idxs[:,None] + self.input_idx]
         batch_target    = self.tokens[idxs[:,None] + self.target_idx]
 
