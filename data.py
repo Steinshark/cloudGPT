@@ -25,12 +25,13 @@ def load_tokenizer(f_root:str)->ByteLevelBPETokenizer:
 #Allows sampling of tokens
 class TokenizedDataset(Dataset):
 
-    def __init__(self, tokens, input_size,max_tokens=None,shuffle=False,augmenting=True,valid_size=32768):
+    def __init__(self, tokens, input_size,max_tokens=None,shuffle=False,augmenting=True,valid_size=32768,device_override='cpu'):
         
         self.loaded_files   = set()
         self.shuffle        = shuffle
         self.max_tokens     = max_tokens
         self.augmenting     = augmenting
+        self.device         = device_override
 
         #Treat it as tokens list 
         if isinstance(tokens, numpy.ndarray):
@@ -67,27 +68,31 @@ class TokenizedDataset(Dataset):
 
         
         self.tokens         = tokens.contiguous().to(torch.long)[:self.max_tokens+valid_size]  # Make sure it's contiguous for fast slicing
-        self.tokens         = self.tokens.cuda()
+        self.tokens         = self.tokens
         
         #Build a test set 
         self.validation_set = self.tokens[:valid_size] 
-        self.tokens         = self.tokens[valid_size:].cuda()
+        self.tokens         = self.tokens[valid_size:]
         self.tokens.to(torch.int16)
 
         self.input_size     = input_size
         self.n_tokens       = len(self.tokens)
 
-        self.input_idx      = torch.arange(input_size,device=torch.device('cuda'))
-        self.target_idx     = torch.arange(input_size,device=torch.device('cuda')) + 1 
+        if self.device == 'cuda':
+            self.tokens.to(self.device)
+            self.validation_set.to(self.device)
+        
+        self.input_idx      = torch.arange(input_size,device=torch.device(self.device))
+        self.target_idx     = torch.arange(input_size,device=torch.device(self.device)) + 1 
 
         n_batches           = self.n_tokens // (input_size+1)
-        self.base_idxs      = torch.arange(0,n_batches,device='cuda',dtype=torch.int32)
+        self.base_idxs      = torch.arange(0,n_batches,device=self.device,dtype=torch.int32)
         self.shuffle_indices()
 
             
     #Reshuffle indices - call for a new epoch
     def shuffle_indices(self):
-        perm                = torch.randperm(self.base_idxs.shape[0],device='cuda')
+        perm                = torch.randperm(self.base_idxs.shape[0],device=self.device)
         self.shuffled_idxs  = self.base_idxs[perm]
         self.cur_i          = 0 
 
@@ -323,9 +328,10 @@ if __name__ == "__main__":
     from transformers import AutoTokenizer
 
     tokenizer   = load_tokenizer('//Steinpc/s/nlp/tokenizer')
-    ftt         = FinetuneTokenizer(tokenizer,128,RESERVE_1)
-    #out         = ftt.batch_tokenize(["This one is a Test","this Two is a test. It is longer"])
+    dataset     = TokenizedDataset("//Steinpc/s/nlp/smallset",512,1024*1024*1024*1024,)
 
+    print(f"found {dataset.n_tokens//1_000_000}M tokens")
+    exit()
 
     fname       = '//Steinpc/S/nlp/data/factual_dataset_select.jsonl'
     dataset     = FinetuneDataset(fname, ftt,data_cap=64)
