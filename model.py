@@ -97,11 +97,11 @@ class MultiHeadAttention(torch.nn.Module):
         attn_scores     = torch.matmul(Q,K.transpose(-2,-1)) * self.scale 
 
         #apply both masks 
-        if self.training:
-            attn_scores     = attn_scores.masked_fill(self.causal_mask==0,float('-inf'))    #Apply attention
-        else:
-            causal_mask     = torch.tril(torch.ones(size=(N,N),dtype=torch.bool,device=x.device))
-            attn_scores     = attn_scores.masked_fill(causal_mask==0,float('-inf'))    #Apply attention
+        #if self.training#:
+#            attn_scores     = attn_scores.masked_fill(self.causal_mask==0,float('-inf'))    #Apply attention
+ #       else:
+        causal_mask     = torch.tril(torch.ones(size=(N,N),dtype=torch.bool,device=x.device))
+        attn_scores     = attn_scores.masked_fill(causal_mask==0,float('-inf'))    #Apply attention
         attn_scores     = attn_scores.masked_fill(user_mask==0,float('-inf'))
 
         #Reduce by max value 

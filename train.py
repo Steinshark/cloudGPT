@@ -174,9 +174,22 @@ if __name__ == "__main__":
     model.stats['tok_snap']         = 0             #For measuring thorughput 
     model.stats['time_snap']        = time.time()
 
+
+    #Implement context increase 
+    next_iter                       = [(8*1024,16),(32*1024,64),(64*1024,256),(128*1024,512)]
+    cur_context                     = 8
+    static_mask                     = torch.ones(size=(bs*input_size//cur_context,cur_context),dtype=torch.bool,device=model.device)
     #Run training loop
     while cur_train_iter < train_iters:
+        
+        #Check for context size shift 
 
+        if next_iter and next_iter[0][0] < cur_train_iter: 
+            old_ctxt                        = cur_context
+            cur_context                     = next_iter[0][1]
+            next_iter                       = next_iter[1:]
+            static_mask                     = torch.ones(size=(bs*input_size//cur_context,cur_context),dtype=torch.bool,device=model.device)
+            print(f"\nshift context {old_ctxt} -> {cur_context}\n")
         #Sample data 
         num_tok                             = input_size
         batch                               = dataset.sample(bs,input_size,model.device)
@@ -185,6 +198,11 @@ if __name__ == "__main__":
         input_ids                           = batch['input_ids']
         target_ids                          = batch['target_ids'] 
         
+        #Reshape based on current input size 
+        eff_bs                              = bs*input_size//cur_context
+        input_ids                           = input_ids.view(eff_bs,cur_context)
+        target_ids                          = target_ids.view(eff_bs,cur_context)
+
         #Put through model 
         logits,target_ids                   = model.forward(input_ids,target_ids,static_mask)
         logits                              = logits.view(bs*input_size,vocab_size)
