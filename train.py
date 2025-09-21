@@ -44,8 +44,6 @@ def print_update(cur_train_iter,train_iters,model:LMSteinshark,tokenizer:ByteLev
         print(f"{model_output}\n\n")
         LAST_SAMPLE_T          = time.time()
 
-        if dataset.augment_data():
-            print(f"\tDataset augmented  {dataset.n_tokens}")
 
 
 if __name__ == "__main__":

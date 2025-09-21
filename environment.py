@@ -25,6 +25,7 @@ ALLOWABLE_CHAR                  = string.ascii_lowercase + string.ascii_uppercas
 LOWER                           = False
 
 
+MODELS                  = f"{ENV_PREFIX}/models"
 #TRAINING SETTINGS 
 UPDATE_EVERY_T                  = int(60)
 SAMPLE_EVERY_T                  = 10*60

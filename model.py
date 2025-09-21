@@ -42,7 +42,7 @@ def apply_rope(x, seq_len, device):
     half_dim = head_dim // 2
 
     # Compute frequencies
-    theta = 1.0 / (10000 ** (torch.arange(0, half_dim, dtype=torch.bfloat16, device=device) / half_dim))
+    theta = 1.0 / (5000 ** (torch.arange(0, half_dim, dtype=torch.bfloat16, device=device) / half_dim))
     seq_idx = torch.arange(seq_len, device=device)#.float()
     freqs = torch.einsum("i,j->ij", seq_idx, theta)
 
